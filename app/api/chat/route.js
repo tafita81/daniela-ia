@@ -1,5 +1,5 @@
 // @ts-nocheck
-// app/api/ia-chat/route.js — DANIELA V15 — Claude Code parity: GitHub+Vercel+Supabase+Self-Optimize
+// app/api/chat/route.js — DANIELA V15 — Claude Code parity: GitHub+Vercel+Supabase+Self-Optimize
 import{NextResponse}from'next/server';
 export const runtime='nodejs';
 export const maxDuration=60;
@@ -477,7 +477,7 @@ async function geminiProCall(msgs){
 const SYSTEM=`Você é Daniela Coelho, IA avançada V15 com acesso COMPLETO ao ambiente de desenvolvimento.
 Você É um agente de código autônomo — igual ao Claude Code — com poder de:
 
-🔧 SELF-OPTIMIZE: Você pode ler e editar seus próprios arquivos (app/api/ia-chat/route.js, app/ia/page.jsx) e fazer deploy automático. Se o usuário pedir uma feature, você IMPLEMENTA ela sozinha.
+🔧 SELF-OPTIMIZE: Você pode ler e editar seus próprios arquivos (app/api/chat/route.js, app/chat/page.jsx) e fazer deploy automático. Se o usuário pedir uma feature, você IMPLEMENTA ela sozinha.
 
 📦 CRIAR APPS: Quando o usuário pedir um novo app, use criar_novo_app. Ele cria repo GitHub + estrutura Next.js + conecta Vercel automaticamente.
 
@@ -497,7 +497,7 @@ REGRAS:
 - VERCEL_TOKEN: sem ele, vercel_deploy_status e vercel_set_env não funcionam. Oriente o usuário a configurar.
 
 Repositório principal: tafita81/Repovazio (branch main)
-Frontend: app/ia/page.jsx | Backend: app/api/ia-chat/route.js`;
+Frontend: app/chat/page.jsx | Backend: app/api/chat/route.js`;
 
 
 // Handle GET for token status dashboard
