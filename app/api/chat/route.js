@@ -9,6 +9,88 @@ const PAT=process.env.GH_PAT,SBU=process.env.NEXT_PUBLIC_SUPABASE_URL,SBK=proces
 const VTK=process.env.VERCEL_TOKEN,VTM=process.env.VERCEL_TEAM_ID||'team_zr9vAef0Zz3njNAiGm3v5Y3h';
 const REPO='tafita81/Repovazio',VER='V15-ULTRA-2026-05-03';
 
+
+// ── TOKEN MONITORING & MULTI-MODEL FALLBACK ─────────────────────────────
+// Limits per model (daily for Groq free, per-minute for others)
+const MODEL_CHAIN=[
+  {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK},
+  {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK},
+  {name:'gemini-1.5-flash',provider:'gemini',limit:999999,key:()=>GEK},
+  {name:'gemini-1.5-pro',provider:'gemini',limit:50000,key:()=>GEK},
+];
+const SWITCH_THRESHOLD=0.88; // switch at 88% of limit
+
+async function getTokenState(){
+  if(!SBU||!SBK)return{model:'llama-3.3-70b-versatile',used:0,limit:100000,chain_idx:0};
+  try{
+    const r=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.token_state&select=value`,
+      {headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});
+    const d=await r.json();
+    if(d[0]?.value)return JSON.parse(d[0].value);
+  }catch(e){}
+  return{model:'llama-3.3-70b-versatile',used:0,limit:100000,chain_idx:0,last_reset:Date.now()};
+}
+
+async function saveTokenState(state){
+  if(!SBU||!SBK)return;
+  const val=JSON.stringify({...state,updated_at:Date.now()});
+  await fetch(`${SBU}/rest/v1/ia_cache`,{method:'POST',
+    headers:{apikey:SBK,Authorization:`Bearer ${SBK}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
+    body:JSON.stringify({cache_key:'token_state',value:val,expires_at:new Date(Date.now()+7*864e5).toISOString()})}).catch(()=>{});
+}
+
+async function updateTokenUsage(tokensEstimate){
+  const state=await getTokenState();
+  // Reset daily if needed (Groq resets every 24h)
+  if(state.provider==='groq'&&Date.now()-state.last_reset>86400000){
+    state.used=0;state.last_reset=Date.now();
+  }
+  state.used=(state.used||0)+tokensEstimate;
+  // Check if need to switch model
+  const m=MODEL_CHAIN[state.chain_idx||0];
+  if(m&&state.used>=(m.limit*SWITCH_THRESHOLD)){
+    const nextIdx=(state.chain_idx+1)%MODEL_CHAIN.length;
+    const next=MODEL_CHAIN[nextIdx];
+    state.chain_idx=nextIdx;
+    state.model=next.name;
+    state.provider=next.provider;
+    state.used=0;
+    state.last_reset=Date.now();
+    state.switched_at=new Date().toISOString();
+    // Save checkpoint for continuation
+    state.switch_event=`Switched from ${m.name} to ${next.name} at ${new Date().toLocaleString('pt-BR')}`;
+  }
+  await saveTokenState(state);
+  return state;
+}
+
+async function saveCheckpoint(msgs,state){
+  if(!SBU||!SBK)return;
+  const checkpoint={
+    msgs:msgs.slice(-10), // last 10 messages
+    model:state.model,
+    ts:Date.now(),
+    summary:msgs[msgs.length-1]?.content?.substring(0,200)||''
+  };
+  await fetch(`${SBU}/rest/v1/ia_cache`,{method:'POST',
+    headers:{apikey:SBK,Authorization:`Bearer ${SBK}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
+    body:JSON.stringify({cache_key:'conversation_checkpoint',value:JSON.stringify(checkpoint),expires_at:new Date(Date.now()+2*864e5).toISOString()})}).catch(()=>{});
+}
+
+async function getActiveModel(requestedModel){
+  const state=await getTokenState();
+  const chainModel=MODEL_CHAIN[state.chain_idx||0];
+  return{
+    model:requestedModel||state.model||chainModel.name,
+    provider:state.provider||chainModel.provider,
+    chain_idx:state.chain_idx||0,
+    tokens_used:state.used||0,
+    tokens_limit:chainModel?.limit||100000,
+    switched_at:state.switched_at||null,
+    switch_event:state.switch_event||null,
+  };
+}
+
 const TOOLS=[
   // ── WEB ──
   {type:'function',function:{name:'pesquisar_web',description:'Pesquisa na internet em tempo real',parameters:{type:'object',properties:{query:{type:'string'},num:{type:'number'}},required:['query']}}},
@@ -372,9 +454,37 @@ REGRAS:
 Repositório principal: tafita81/Repovazio (branch main)
 Frontend: app/ia/page.jsx | Backend: app/api/ia-chat/route.js`;
 
+
+// Handle GET for token status dashboard
+export async function GET(){
+  const state=await getTokenState();
+  const m=MODEL_CHAIN[state.chain_idx||0];
+  const pct=Math.round(((state.used||0)/(m?.limit||100000))*100);
+  const next=MODEL_CHAIN[(state.chain_idx+1)%MODEL_CHAIN.length];
+  return NextResponse.json({
+    ok:true,
+    current:{model:state.model||m?.name,provider:state.provider||m?.provider,used:state.used||0,limit:m?.limit||100000,pct,remaining:(m?.limit||100000)-(state.used||0)},
+    next:{model:next?.name,provider:next?.provider},
+    switch_at:Math.round((m?.limit||100000)*SWITCH_THRESHOLD),
+    switched_at:state.switched_at||null,
+    switch_event:state.switch_event||null,
+    chain:MODEL_CHAIN.map((mm,i)=>({...mm,active:i===state.chain_idx})),
+    updated_at:state.updated_at||null,
+  });
+}
+
 export async function POST(req){
   try{
     const body=await req.json();
+    // Token-aware model selection
+    const tokenState=await getActiveModel(body.model);
+    const activeModelName=tokenState.model;
+    const activeProvider=tokenState.provider;
+    // Check for continuation after model switch
+    let continuationNote='';
+    if(tokenState.switched_at&&Date.now()-new Date(tokenState.switched_at).getTime()<300000){
+      continuationNote=`\n\n[SISTEMA: Você é ${activeModelName} continuando a conversa. A IA anterior (${MODEL_CHAIN.map(m=>m.name).find(n=>n!==activeModelName)||'anterior'}) atingiu o limite de tokens. Continue naturalmente do ponto onde parou, sem mencionar a troca a menos que perguntado.]`;
+    }
     const{messages=[],stream:doStream=true,image,session_id,mcpCredentials={},skills={}}=body;
     const sysMsgs=[{role:'system',content:SYSTEM}];
     if(Object.keys(skills).length){sysMsgs.push({role:'system',content:`SKILLS: ${Object.entries(skills).map(([k,v])=>`[${k}]: ${v.substring(0,150)}`).join(' | ')}`});}
@@ -383,6 +493,12 @@ export async function POST(req){
     if(image&&chatMsgs.length>0){const last=chatMsgs[chatMsgs.length-1];if(last.role==='user')chatMsgs[chatMsgs.length-1]={...last,content:`${last.content}\n[Imagem anexada]`};}
     const allMsgs=[...sysMsgs,...chatMsgs];
 
+
+    // Estimate tokens used and save checkpoint
+    const totalChars=chatMsgs.reduce((a,m)=>a+String(m.content||'').length,0);
+    const estimatedTokens=Math.ceil(totalChars/4);
+    updateTokenUsage(estimatedTokens).catch(()=>{});
+    saveCheckpoint(chatMsgs,{model:activeModelName}).catch(()=>{});
     if(doStream&&GK){
       const enc=new TextEncoder();
       const stream=new ReadableStream({
