@@ -16,7 +16,7 @@ const MODEL_CHAIN=[
   {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK},
   {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK},
   {name:'gemini-2.0-flash',provider:'gemini',limit:1500,key:()=>GEK},
-  {name:'command-r-plus',provider:'cohere',limit:5000000,key:()=>CHK},
+  {name:'command-r-08-2024',provider:'cohere',limit:5000000,key:()=>CHK},
 ];
 const SWITCH_THRESHOLD=0.88; // switch at 88% of limit
 
@@ -463,7 +463,7 @@ async function cohereCall(msgs){
       .map(m=>({role:m.role==='assistant'?'assistant':'user',content:String(m.content||'...')}));
     if(!chatMsgs.length)return null;
     const sysMsg=msgs.find(m=>m.role==='system');
-    const body={model:'command-r-plus',messages:chatMsgs,max_tokens:1000,temperature:0.7};
+    const body={model:'command-r-08-2024',messages:chatMsgs,max_tokens:1000,temperature:0.7};
     if(sysMsg)body.system=sysMsg.content;
     const r=await fetch('https://api.cohere.com/v2/chat',{method:'POST',
       headers:{Authorization:`Bearer ${CHK}`,'Content-Type':'application/json'},
