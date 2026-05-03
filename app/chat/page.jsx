@@ -123,6 +123,260 @@ function ConnectorsList({connectors,setConnectors}){
   );
 }
 
+// ── CONNECTORS PANEL — TODOS OS CONECTORES DO CLAUDE ──────────────────────
+// Lista completa extraída das screenshots (100+ conectores)
+const ALL_SVCS=[
+// IA Providers
+{id:'groq',name:'Groq',e:'🦙',d:'Llama 3.3 70B — IA principal',cat:'ai'},
+{id:'cohere',name:'Cohere',e:'🟡',d:'Command-R — Fallback IA',cat:'ai'},
+{id:'gemini',name:'Gemini',e:'✨',d:'Google Gemini 2.0 Flash',cat:'ai'},
+{id:'together',name:'Together AI',e:'🔷',d:'Llama via Together',cat:'ai'},
+// Infra (auto-detectados)
+{id:'github',name:'GitHub',i:'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png',d:'Repositórios e código',cat:'infra',p:1},
+{id:'supabase',name:'Supabase',i:'https://supabase.com/favicon.ico',d:'Banco de dados e cache',cat:'infra',p:24},
+{id:'vercel',name:'Vercel',i:'https://vercel.com/favicon.ico',d:'Deploy e infraestrutura',cat:'infra',p:20},
+// Conectores do Claude (por popularidade)
+{id:'google_drive',name:'Google Drive',i:'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png',d:'Busque, leia e envie arquivos',cat:'prod',p:2},
+{id:'gmail',name:'Gmail',i:'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico',d:'Rascunhe e pesquise e-mails',cat:'prod',p:3},
+{id:'google_calendar',name:'Google Calendar',i:'https://calendar.google.com/googlecalendar/images/favicons_2020q4/calendar_2.ico',d:'Gerencie agenda e reuniões',cat:'prod',p:4},
+{id:'canva',name:'Canva',i:'https://www.canva.com/favicon.ico',d:'Crie e exporte designs',cat:'design',p:5},
+{id:'shopify',name:'Shopify',i:'https://cdn.shopify.com/shopifycloud/web/assets/v1/vite/client/en/assets/shopify-icon-KvbXwK9S.svg',d:'Gerencie sua loja Shopify',cat:'biz',p:5},
+{id:'figma',name:'Figma',i:'https://www.figma.com/favicon.ico',d:'Diagramas e código de design',cat:'design',p:6},
+{id:'notion',name:'Notion',i:'https://www.notion.so/front-static/favicon.ico',d:'Páginas e bases de dados',cat:'prod',p:7},
+{id:'jira',name:'Atlassian Rovo',i:'https://www.atlassian.com/favicon.ico',d:'Jira e Confluence',cat:'dev',p:8},
+{id:'slack',name:'Slack',i:'https://a.slack-edge.com/80588/marketing/img/meta/slack_hash_256.png',d:'Mensagens e canais',cat:'prod',p:9},
+{id:'microsoft365',name:'Microsoft 365',i:'https://www.microsoft.com/favicon.ico',d:'SharePoint, OneDrive, Teams',cat:'biz',p:10},
+{id:'hubspot',name:'HubSpot',i:'https://www.hubspot.com/favicon.ico',d:'Dados CRM e insights',cat:'biz',p:11},
+{id:'linear',name:'Linear',i:'https://linear.app/favicon.ico',d:'Issues e sprints',cat:'dev',p:12},
+{id:'monday',name:'monday.com',i:'https://monday.com/favicon.ico',d:'Projetos e quadros',cat:'prod',p:13},
+{id:'intercom',name:'Intercom',e:'💬',d:'Dados de clientes',cat:'biz',p:14},
+{id:'box',name:'Box',e:'📦',d:'Busque conteúdo Box',cat:'prod',p:15},
+{id:'miro',name:'Miro',i:'https://miro.com/favicon.ico',d:'Quadros colaborativos',cat:'design',p:16},
+{id:'gamma',name:'Gamma',i:'https://gamma.app/favicon.ico',d:'Apresentações com IA',cat:'design',p:17},
+{id:'asana',name:'Asana',i:'https://app.asana.com/favicon.ico',d:'Projetos e metas',cat:'prod',p:18},
+{id:'granola',name:'Granola',e:'📓',d:'Bloco de notas para reuniões',cat:'meet',p:19},
+{id:'vercel2',name:'Vercel MCP',i:'https://vercel.com/favicon.ico',d:'Deploy e projetos',cat:'dev',p:20},
+{id:'microsoft_learn',name:'Microsoft Learn',i:'https://www.microsoft.com/favicon.ico',d:'Docs Microsoft para dev',cat:'dev',p:21},
+{id:'zoom',name:'Zoom for Claude',i:'https://zoom.us/favicon.ico',d:'Reuniões, resumos e ações',cat:'meet',p:22},
+{id:'sentry',name:'Sentry',i:'https://sentry.io/favicon.ico',d:'Debug e erros',cat:'dev',p:23},
+{id:'excalidraw',name:'Excalidraw',e:'✏️',d:'Diagramas interativos',cat:'design',p:25},
+{id:'airtable',name:'Airtable',i:'https://airtable.com/favicon.ico',d:'Dados estruturados',cat:'prod',p:26},
+{id:'indeed',name:'Indeed',i:'https://indeed.com/favicon.ico',d:'Busque empregos',cat:'other',p:27},
+{id:'lucid',name:'Lucid',i:'https://lucid.app/favicon.ico',d:'Diagramas e alinhamento',cat:'design',p:29},
+{id:'zapier',name:'Zapier',i:'https://zapier.com/favicon.ico',d:'Automatize apps',cat:'prod',p:30},
+{id:'clickup',name:'ClickUp',i:'https://clickup.com/favicon.ico',d:'Gestão de projetos',cat:'prod',p:31},
+{id:'mermaid',name:'Mermaid Chart',e:'🔷',d:'Diagramas Mermaid SVG',cat:'design',p:32},
+{id:'pubmed',name:'PubMed',e:'🔬',d:'Literatura biomédica',cat:'research',p:33},
+{id:'zoominfo',name:'ZoomInfo',e:'📊',d:'Contatos GTM intelligence',cat:'biz',p:34},
+{id:'context7',name:'Context7',e:'📚',d:'Docs atualizados para LLMs',cat:'dev',p:36},
+{id:'stripe',name:'Stripe',i:'https://stripe.com/favicon.ico',d:'Infraestrutura de pagamentos',cat:'biz',p:40},
+{id:'ahrefs',name:'Ahrefs',e:'🔗',d:'SEO e analytics',cat:'mkt',p:39},
+{id:'apollo',name:'Apollo.io',e:'🚀',d:'Encontre compradores',cat:'biz',p:42},
+{id:'fireflies',name:'Fireflies',i:'https://fireflies.ai/favicon.ico',d:'Insights de reuniões',cat:'meet',p:43},
+{id:'sp_global',name:'S&P Global',e:'📈',d:'Datasets S&P Global',cat:'finance',p:44},
+{id:'pitchbook',name:'PitchBook Premium',e:'💼',d:'Dados PitchBook',cat:'finance',p:45},
+{id:'hugging_face',name:'Hugging Face',i:'https://huggingface.co/favicon.ico',d:'Hub de IA e Gradio',cat:'research',p:46},
+{id:'wordpress',name:'WordPress.com',i:'https://wordpress.com/favicon.ico',d:'Gerencie sites WordPress',cat:'media',p:47},
+{id:'webflow',name:'Webflow',e:'🌊',d:'CMS e sites Webflow',cat:'dev',p:50},
+{id:'cloudflare',name:'Cloudflare',i:'https://www.cloudflare.com/favicon.ico',d:'Compute, storage e AI',cat:'dev',p:51},
+{id:'postman',name:'Postman',i:'https://www.postman.com/favicon.ico',d:'Contexto de API',cat:'dev',p:53},
+{id:'ramp',name:'Ramp',e:'💳',d:'Dados financeiros Ramp',cat:'finance',p:54},
+{id:'mixpanel',name:'Mixpanel',e:'📉',d:'Analytics e dados',cat:'mkt',p:56},
+{id:'bigquery',name:'Google Cloud BigQuery',i:'https://cloud.google.com/favicon.ico',d:'Analytics avançado',cat:'mkt',p:57},
+{id:'quickbooks',name:'Intuit QuickBooks',e:'💰',d:'Finanças simplificadas',cat:'biz',p:58},
+{id:'make',name:'Make',i:'https://www.make.com/favicon.ico',d:'Cenários e automações',cat:'prod',p:59},
+{id:'windsor',name:'Windsor.ai',e:'📊',d:'Marketing analytics 325+',cat:'mkt',p:61},
+{id:'factset',name:'FactSet AI-Ready Data',e:'📊',d:'Dados financeiros institucionais',cat:'finance',p:62},
+{id:'posthog',name:'PostHog',i:'https://posthog.com/favicon.ico',d:'Analytics e gestão',cat:'dev',p:64},
+{id:'calendly',name:'Calendly',i:'https://calendly.com/favicon.ico',d:'Agendamentos',cat:'prod',p:65},
+{id:'godaddy',name:'GoDaddy',i:'https://www.godaddy.com/favicon.ico',d:'Domínios e hospedagem',cat:'other',p:65},
+{id:'netlify',name:'Netlify',e:'🌐',d:'Deploy web',cat:'dev',p:67},
+{id:'lilt',name:'LILT',e:'🌍',d:'Tradução profissional IA',cat:'other',p:68},
+{id:'outreach',name:'Outreach',e:'📤',d:'Performance de vendas',cat:'biz',p:73},
+{id:'harvey',name:'Harvey',e:'⚖️',d:'Pesquisa jurídica',cat:'other',p:75},
+{id:'scholar',name:'Scholar Gateway',e:'📖',d:'Pesquisa acadêmica',cat:'research',p:76},
+{id:'clinical_trials',name:'Clinical Trials',e:'🏥',d:'Dados ClinicalTrials.gov',cat:'research',p:77},
+{id:'fathom',name:'Fathom',e:'🎙️',d:'Reuniões em conversas',cat:'meet',p:78},
+{id:'icd10',name:'ICD-10 Codes',e:'🏥',d:'Códigos ICD-10-CM e PCS',cat:'research',p:79},
+{id:'pdf_viewer',name:'PDF Viewer',e:'📄',d:'Renderiza PDFs de URLs',cat:'other',p:80},
+{id:'kiwi',name:'Kiwi.com',e:'✈️',d:'Passagens aéreas',cat:'travel',p:81},
+{id:'aws_marketplace',name:'AWS Marketplace',i:'https://aws.amazon.com/favicon.ico',d:'Soluções cloud AWS',cat:'infra',p:82},
+{id:'similarweb',name:'Similarweb',e:'📊',d:'Dados web em tempo real',cat:'mkt',p:84},
+{id:'morningstar',name:'Morningstar',e:'⭐',d:'Insights de investimento',cat:'finance',p:86},
+{id:'biorxiv',name:'bioRxiv',e:'🔬',d:'Preprints biomédicos',cat:'research',p:87},
+{id:'guru',name:'Guru',e:'📋',d:'Conhecimento da empresa',cat:'prod',p:89},
+{id:'udemy',name:'Udemy Business',e:'🎓',d:'Recursos de aprendizado',cat:'other',p:91},
+{id:'cms_coverage',name:'CMS Coverage',e:'🏥',d:'Banco dados CMS Coverage',cat:'research',p:92},
+{id:'incident_io',name:'incident.io',e:'🚨',d:'Gestão de incidentes',cat:'dev',p:93},
+{id:'paypal',name:'PayPal',i:'https://www.paypal.com/favicon.ico',d:'Plataforma de pagamentos',cat:'biz',p:94},
+{id:'pagerduty',name:'PagerDuty',e:'🚨',d:'Incidentes e on-call',cat:'dev',p:95},
+{id:'chembl',name:'ChEMBL',e:'⚗️',d:'Banco dados ChEMBL',cat:'research',p:96},
+{id:'mailchimp',name:'Intuit Mailchimp',e:'🐒',d:'Campanhas de marketing',cat:'mkt',p:97},
+{id:'supermetrics',name:'Supermetrics',e:'📊',d:'Google Ads, Facebook e 200+ plataformas',cat:'mkt',p:98},
+{id:'surveymonkey',name:'SurveyMonkey',e:'📋',d:'Pesquisas e análises',cat:'biz',p:99},
+{id:'brex',name:'Brex',e:'💳',d:'Automação financeira',cat:'finance',p:102},
+{id:'open_targets',name:'Open Targets',e:'🎯',d:'Alvos de drogas',cat:'research',p:103},
+{id:'exa',name:'Exa',e:'🔍',d:'Busca web + docs',cat:'research',p:108},
+{id:'lastminute',name:'lastminute.com',e:'✈️',d:'Voos, hotéis e pacotes',cat:'travel',p:109},
+{id:'metaview',name:'Metaview',e:'👥',d:'Plataforma de recrutamento',cat:'biz',p:113},
+{id:'goodnotes',name:'Goodnotes',e:'📝',d:'Insights em documentos',cat:'prod',p:127},
+{id:'lusha',name:'Lusha',e:'👤',d:'Contatos B2B',cat:'biz',p:132},
+{id:'mem',name:'Mem',e:'💭',d:'Bloco de notas IA',cat:'prod',p:158},
+{id:'dovetail',name:'Dovetail',e:'🔀',d:'Feedback em decisões',cat:'biz',p:193},
+{id:'adisinsight',name:'AdisInsight',e:'💊',d:'Dados clínicos farmacêuticos',cat:'research',p:210},
+{id:'coindesk',name:'CoinDesk',e:'₿',d:'Dados cripto em tempo real',cat:'finance'},
+{id:'xero',name:'Xero',e:'💼',d:'Finanças corporativas',cat:'biz'},
+{id:'ibisworld',name:'IBISWorld',e:'📊',d:'Dados de 50k indústrias',cat:'finance'},
+{id:'adobe_creativity',name:'Adobe for Creativity',i:'https://www.adobe.com/favicon.ico',d:'Ferramentas criativas Adobe',cat:'design'},
+{id:'adobe_journey',name:'Adobe Journey Optimizer',i:'https://www.adobe.com/favicon.ico',d:'Journeys e campanhas',cat:'mkt'},
+{id:'adobe_marketing',name:'Adobe Marketing Agent',i:'https://www.adobe.com/favicon.ico',d:'Insights de campanha',cat:'mkt'},
+{id:'adobe_experience',name:'Adobe Experience Manager',i:'https://www.adobe.com/favicon.ico',d:'Gestão de conteúdo',cat:'mkt'},
+{id:'autodesk',name:'Autodesk Product Help',e:'🔧',d:'Docs Autodesk',cat:'other'},
+{id:'malwarebytes',name:'Malwarebytes',e:'🛡️',d:'Verifica links e e-mails',cat:'other'},
+{id:'trimble',name:'Trimble SketchUp',e:'🏗️',d:'Modelos 3D SketchUp',cat:'design'},
+{id:'datasite',name:'Datasite',e:'📁',d:'M&A data room',cat:'biz'},
+{id:'superhuman',name:'Superhuman Mail',e:'📧',d:'E-mail e calendário',cat:'prod'},
+{id:'audible',name:'Audible',e:'🎧',d:'Recomendações de audiobooks',cat:'media'},
+{id:'motion',name:'Motion Creative Analytics',e:'📺',d:'Análise de criativos Meta',cat:'mkt'},
+{id:'clay',name:'Clay',e:'🧱',d:'Prospecção e personalização',cat:'biz'},
+{id:'scite',name:'Scite',e:'📝',d:'Respostas baseadas em evidências',cat:'research'},
+{id:'stubhub',name:'StubHub',e:'🎟️',d:'Maior mercado de ingressos',cat:'travel'},
+{id:'otter',name:'Otter.ai',e:'🦦',d:'Inteligência de reuniões',cat:'meet'},
+{id:'peec',name:'Peec AI',e:'📊',d:'Visibilidade em LLMs',cat:'mkt'},
+{id:'splice',name:'Splice',e:'🎵',d:'Catálogo de sons',cat:'media'},
+{id:'send',name:'Send',e:'📨',d:'Documentos e decks',cat:'prod'},
+{id:'cash_app',name:'Cash App',e:'💵',d:'Descoberta local de food',cat:'travel'},
+{id:'digits',name:'Digits',e:'💰',d:'Analise suas finanças',cat:'finance'},
+{id:'rillet',name:'Rillet',e:'📊',d:'GL e finanças em tempo real',cat:'finance'},
+{id:'orion',name:'Orion by Gravity',e:'🔭',d:'Insights de análise IA',cat:'biz'},
+{id:'g2',name:'G2',e:'🌟',d:'Sinais de compradores',cat:'biz'},
+{id:'grain',name:'Grain',e:'🌾',d:'Reuniões em insights',cat:'meet'},
+{id:'contentsquare',name:'Contentsquare',e:'📊',d:'Analytics de experiência',cat:'mkt'},
+{id:'kindora',name:'Kindora Funder Discovery',e:'🤝',d:'Descubra financiadores',cat:'other'},
+{id:'unthread',name:'Unthread',e:'🎫',d:'Tickets de suporte',cat:'biz'},
+{id:'ketryx',name:'Ketryx',e:'🔬',d:'Dados de software regulado',cat:'research'},
+{id:'ice_data',name:'ICE Data Services',e:'📊',d:'Dados de renda fixa',cat:'finance'},
+{id:'playmcp',name:'PlayMCP',e:'🎮',d:'Servidores PlayMCP',cat:'dev'},
+{id:'govtribe',name:'GovTribe',e:'🏛️',d:'Dados de contratos gov',cat:'other'},
+{id:'tropic',name:'Tropic',e:'💸',d:'Economize em contratos IA',cat:'biz'},
+{id:'lusha2',name:'Lusha',e:'👤',d:'Enriqueça contatos B2B',cat:'biz'},
+{id:'clarify',name:'Clarify',e:'🔍',d:'Analytics de chamadas',cat:'biz'},
+{id:'gitlab',name:'GitLab',i:'https://gitlab.com/favicon.ico',d:'Repositórios e CI/CD',cat:'dev'},
+{id:'google_compute',name:'Google Compute Engine',i:'https://cloud.google.com/favicon.ico',d:'Infraestrutura Google',cat:'infra'},
+{id:'spotify',name:'Spotify',i:'https://open.spotify.com/favicon.ico',d:'Música e podcasts',cat:'media'},
+{id:'tripadvisor',name:'Tripadvisor',i:'https://www.tripadvisor.com/favicon.ico',d:'Hotel perfeito',cat:'travel'},
+{id:'uber',name:'Uber',i:'https://www.uber.com/favicon.ico',d:'Estimativas de corrida',cat:'travel'},
+{id:'uber_eats',name:'Uber Eats',i:'https://www.ubereats.com/favicon.ico',d:'Restaurantes e pratos',cat:'travel'},
+{id:'viator',name:'Viator',i:'https://www.viator.com/favicon.ico',d:'Experiências de viagem',cat:'travel'},
+{id:'resy',name:'Resy',e:'🍽️',d:'Reserve restaurantes',cat:'travel'},
+{id:'alltrails',name:'AllTrails',i:'https://www.alltrails.com/favicon.ico',d:'Trilhas e caminhadas',cat:'travel'},
+{id:'thumbtack',name:'Thumbtack',i:'https://www.thumbtack.com/favicon.ico',d:'Profissionais locais',cat:'travel'},
+{id:'booking',name:'Booking.com',i:'https://www.booking.com/favicon.ico',d:'Hotéis e hospedagem',cat:'travel'},
+{id:'instacart',name:'Instacart',e:'🛒',d:'Supermercado rápido',cat:'travel'},
+{id:'kiwi2',name:'Kiwi.com',e:'✈️',d:'Voos baratos',cat:'travel'},
+{id:'taskrabbit',name:'Taskrabbit',e:'🐇',d:'Serviços locais',cat:'travel'},
+{id:'crypto',name:'Crypto.com',i:'https://crypto.com/favicon.ico',d:'Exchange e DeFi',cat:'finance'},
+{id:'dice',name:'Dice',e:'🎲',d:'Vagas de emprego em tech',cat:'other'},
+{id:'docusign',name:'Docusign',i:'https://www.docusign.com/favicon.ico',d:'Contratos e assinaturas',cat:'biz'},
+{id:'wordpress2',name:'WordPress.com MCP',i:'https://wordpress.com/favicon.ico',d:'Sites WordPress',cat:'media'},
+{id:'zoom_for_claude',name:'Zoom for Claude',i:'https://zoom.us/favicon.ico',d:'Reuniões Zoom',cat:'meet'},
+];
+
+// Conectados no Claude do usuário
+const CLAUDE_CONNECTED=new Set(['google_drive','gmail','google_calendar','canva','shopify',
+  'figma','notion','spotify','booking','tripadvisor','gamma','zoom','uber','uber_eats',
+  'docusign','vercel','resy','supabase','viator','indeed','clickup','alltrails','wordpress',
+  'thumbtack','paypal','aws_marketplace','scholar','supermetrics','calendly','zoom_for_claude',
+  'wordpress2','vercel2','docusign']);
+
+function ConnectorsPanel({onClose,apiPath='/api/chat'}){
+  const[health,setHealth]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[userConn,setUserConn]=useState({});
+  const[search,setSearch]=useState('');
+  const[tab,setTab]=useState('all');
+  const[showConn,setShowConn]=useState(false);
+
+  useEffect(()=>{
+    const lc={};
+    ALL_SVCS.forEach(s=>{const v=typeof window!=='undefined'&&localStorage.getItem('conn_'+s.id);if(v)lc[s.id]=v;});
+    setUserConn(lc);
+    fetch(apiPath).then(r=>r.json()).then(d=>{setHealth(d.connections||{});setLoading(false);}).catch(()=>setLoading(false));
+  },[]);
+
+  const isOk=(s)=>health[s.id]===true||CLAUDE_CONNECTED.has(s.id)||!!userConn[s.id];
+
+  const CATS={all:'Todos',ai:'🤖 IA',infra:'⚙️ Infra',prod:'📋 Produtividade',
+    design:'🎨 Design',dev:'💻 Dev',biz:'💼 Negócios',mkt:'📢 Marketing',
+    meet:'🎙️ Reuniões',travel:'✈️ Viagem',research:'🔬 Pesquisa',
+    finance:'💰 Finanças',media:'🎵 Mídia',other:'⚡ Outros'};
+
+  const list=ALL_SVCS.filter(s=>{
+    if(showConn&&!isOk(s))return false;
+    if(tab!=='all'&&s.cat!==tab)return false;
+    if(search){const q=search.toLowerCase();return s.name.toLowerCase().includes(q)||s.d.toLowerCase().includes(q);}
+    return true;
+  }).sort((a,b)=>{const ao=isOk(a)?0:1,bo=isOk(b)?0:1;if(ao!==bo)return ao-bo;return(a.p||999)-(b.p||999);});
+
+  const nConn=ALL_SVCS.filter(isOk).length;
+
+  const Icon=({s,sz=22})=>s.i
+    ?<img src={s.i} alt={s.name} style={{width:sz,height:sz,borderRadius:3,objectFit:'contain',background:'#fff',padding:2,flexShrink:0}} onError={e=>e.target.style.opacity='0'}/>
+    :<span style={{fontSize:Math.round(sz*0.72),flexShrink:0,width:sz,textAlign:'center',lineHeight:1}}>{s.e||'🔌'}</span>;
+
+  return(
+    <div className="pnl" style={{width:'min(420px,97vw)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+      <div className="pnl-hdr" style={{flexShrink:0}}>
+        <span>🔌 Conectores <span style={{fontSize:10,color:'#4ade80',marginLeft:4}}>{nConn}/{ALL_SVCS.length} ativos</span></span>
+        <button onClick={onClose}>✕</button>
+      </div>
+      <div style={{padding:'6px 10px',borderBottom:'1px solid #111',flexShrink:0,display:'flex',gap:6,alignItems:'center'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar..."
+          style={{flex:1,background:'#111',border:'1px solid #222',borderRadius:5,padding:'5px 9px',color:'#e5e7eb',fontSize:12,outline:'none'}}/>
+        <button onClick={()=>setShowConn(c=>!c)} style={{fontSize:10,padding:'4px 8px',borderRadius:4,cursor:'pointer',
+          background:showConn?'rgba(74,222,128,0.15)':'transparent',color:showConn?'#4ade80':'#6b7280',border:'1px solid '+(showConn?'rgba(74,222,128,0.3)':'#222')}}>
+          {showConn?'✓ Ativos':'Todos'}
+        </button>
+        {loading&&<span style={{color:'#4b5563',fontSize:10}}>⟳</span>}
+      </div>
+      <div style={{display:'flex',gap:3,padding:'4px 8px',overflowX:'auto',flexShrink:0,borderBottom:'1px solid #0d0d0d',scrollbarWidth:'none'}}>
+        {Object.entries(CATS).map(([k,v])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{fontSize:9,padding:'2px 7px',borderRadius:3,whiteSpace:'nowrap',cursor:'pointer',
+            background:tab===k?'rgba(139,92,246,0.2)':'transparent',color:tab===k?'#a78bfa':'#6b7280',
+            border:tab===k?'1px solid rgba(139,92,246,0.3)':'1px solid transparent',flexShrink:0}}>{v}</button>
+        ))}
+      </div>
+      <div style={{overflowY:'auto',flex:1,scrollbarWidth:'thin',scrollbarColor:'#222 transparent'}}>
+        {list.map(svc=>{
+          const ok=isOk(svc);
+          return(
+            <div key={svc.id} style={{display:'flex',alignItems:'center',padding:'8px 12px',borderBottom:'1px solid #0a0a0a',gap:9,
+              background:ok?'rgba(74,222,128,0.025)':'transparent',transition:'background 0.1s'}}>
+              <Icon s={svc}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:ok?'#d1d5db':'#6b7280'}}>
+                  {svc.name}{svc.p&&svc.p<=30?<span style={{fontSize:8,color:'#374151',marginLeft:4}}>#{svc.p}</span>:null}
+                </div>
+                <div style={{fontSize:10,color:'#374151',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{svc.d}</div>
+              </div>
+              {ok
+                ?<span style={{color:'#4ade80',fontSize:14,flexShrink:0}}>✓</span>
+                :<button onClick={()=>{const k=window.prompt('Token/API Key para '+svc.name+':');if(k?.trim()){localStorage.setItem('conn_'+svc.id,k.trim());setUserConn(p=>({...p,[svc.id]:k.trim()}));}}}
+                  style={{fontSize:10,color:'#a78bfa',background:'rgba(139,92,246,0.08)',border:'1px solid rgba(139,92,246,0.2)',
+                  borderRadius:4,padding:'2px 7px',cursor:'pointer',flexShrink:0,whiteSpace:'nowrap'}}>Conectar</button>
+              }
+            </div>
+          );
+        })}
+        <div style={{padding:'8px 12px',fontSize:10,color:'#1f2937',textAlign:'center'}}>
+          {list.length} de {ALL_SVCS.length} conectores • ✓ verde = ativo agora
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function StatusBar(){
   const[health,setHealth]=useState(null);
   const[tokenSt,setTokenSt]=useState(null);
@@ -538,7 +792,7 @@ export default function Chat(){
           {file&&(<div className="fp">{file.preview?<img src={file.preview} className="fp-img" alt="preview"/>:<span>📎 {file.name}</span>}<button onClick={()=>setFile(null)}>✕</button></div>)}
           <div className="ic">
             <button className="ub2" onClick={()=>fileRef.current?.click()} title="Anexar">📎</button>
-            <input ref={fileRef} type="file" accept="image/*,application/pdf,.txt,.js,.py,.ts,.jsx,.tsx,.json,.csv,.zip,.md,.html,.xml,.yaml,.yml,.env,.sh" onChange={handleFile} style={{display:'none'}}/>
+            <input ref={fileRef} type="file" accept="*/*" onChange={handleFile} style={{display:'none'}}/>
             <textarea ref={taRef} className="it" placeholder={`Mensagem para Daniela...${useQwen?' [Qwen 3]':''}`} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey} rows={1}/>
             {loading?<button className="sb stop" onClick={stop}>⏹️</button>:<button className={`sb${input.trim()||file?' active':''}`} onClick={send} disabled={!input.trim()&&!file}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>}
           </div>
