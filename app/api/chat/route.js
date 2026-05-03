@@ -563,6 +563,7 @@ async function cohereCall(msgs){
       .map(m=>({role:m.role==='assistant'?'assistant':'user',content:String(m.content||'...')}));
     if(!chatMsgs.length)return null;
     const sysMsg=msgs.find(m=>m.role==='system');
+    if(sysMsg&&chatMsgs.length&&chatMsgs[0].role!=='system')chatMsgs.unshift({role:'system',content:sysMsg.content});
     const body={model:'command-r-08-2024',messages:chatMsgs,max_tokens:1000,temperature:0.7};
     if(sysMsg)body.system=sysMsg.content;
     const r=await fetch('https://api.cohere.com/v2/chat',{method:'POST',
