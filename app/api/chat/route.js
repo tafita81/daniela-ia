@@ -770,9 +770,21 @@ export async function POST(req){
     }
 
     let fMsgs2=[...allMsgs];let reply='';let i=0;
+    const tryFallback=async(msgs)=>{
+      for(const fn of[()=>cohereCall(msgs),()=>geminiCall(msgs),()=>togetherCall(msgs)]){
+        try{const r=await fn();if(r&&r.length>3)return r;}catch(e){}
+      }
+      return null;
+    };
     while(i<5){i++;
-      let d;if(GK){d=await groqCall(fMsgs2,TOOLS);}else{reply=await geminiCall(fMsgs2);break;}
-      const msg=d.choices?.[0]?.message;if(!msg){reply=d.error?.message||'Erro';break;}
+      let d;
+      if(GK){d=await groqCall(fMsgs2,TOOLS);}
+      else{reply=await tryFallback(fMsgs2)||'⏳ IA no limite. Tente em instantes!';break;}
+      if(!d.choices?.[0]){
+        reply=await tryFallback(fMsgs2)||'⏳ IA no limite. Tente em instantes!';
+        break;
+      }
+      const msg=d.choices[0].message;
       if(!msg.tool_calls?.length){reply=msg.content||'';break;}
       fMsgs2.push(msg);
       for(const tc of msg.tool_calls){let a={};try{a=JSON.parse(tc.function.arguments);}catch(e){}fMsgs2.push({role:'tool',tool_call_id:tc.id,content:await runTool(tc.function.name,a,{mcpCredentials,skills})});}
