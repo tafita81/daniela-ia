@@ -440,7 +440,7 @@ async function geminiCall(msgs){
     const d=await r.json();
     if(!r.ok)return`❌ Gemini erro ${r.status}: ${d.error?.message||JSON.stringify(d).substring(0,100)}`;
     return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gemini: sem resposta';
-  }catch(e){return`❌ Gemini erro: ${e.message}`;} Gemini';
+  }catch(e){return`❌ Gemini erro: ${e.message}`;}
 }
 
 const SYSTEM=`Você é Daniela Coelho, IA avançada V15 com acesso COMPLETO ao ambiente de desenvolvimento.
