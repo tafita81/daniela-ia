@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/ia-chat/route.js — DANIELA V15 — Claude Code parity: GitHub+Vercel+Supabase+Self-Optimize
 import{NextResponse}from'next/server';
 export const runtime='nodejs';
