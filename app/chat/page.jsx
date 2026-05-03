@@ -68,7 +68,7 @@ export default function Chat(){
     abortRef.current=new AbortController();
     let acc='';
     try{
-      const res=await fetch('/api/ia-chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({messages:newMsgs,stream:true,image:fileData,session_id:sessionId,mcpCredentials:connectors,skills,useQwen}),signal:abortRef.current.signal});
       if(!res.ok||!res.body){const d=await res.json().catch(()=>({reply:'Erro'}));const fm=[...newMsgs,{role:'assistant',content:d.reply}];setMsgs(fm);saveSession(fm);setLoading(false);return;}
       const reader=res.body.getReader();const dec=new TextDecoder();
@@ -131,7 +131,7 @@ export default function Chat(){
           ))}
         </div>
         <div className="sb-bot">
-          <div className="ver">{VER||'V14'}</div>
+          <div className="ver">'V15-ULTRA'</div>
           <div className="ui"><div className="ua">D</div><div className="un">Daniela Coelho</div></div>
         </div>
       </aside>
