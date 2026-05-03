@@ -479,5 +479,6 @@ export default function Chat(){
         @media(max-width:768px){.sidebar{display:none;}.mr{padding:12px 12px;}.pnl{right:4px;width:calc(100vw - 8px);}}
       `}</style>
     </div>
+    </>
   );
 }
