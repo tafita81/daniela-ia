@@ -15,8 +15,8 @@ const REPO='tafita81/Repovazio',VER='V15-ULTRA-2026-05-03';
 const MODEL_CHAIN=[
   {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK},
   {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK},
-  {name:'gemini-2.0-flash',provider:'gemini',limit:999999,key:()=>GEK},
-  {name:'gemini-2.0-flash',provider:'gemini',limit:50000,key:()=>GEK},
+  {name:'gemini-2.0-flash',provider:'gemini',limit:1500,key:()=>GEK},
+  {name:'command-r-plus',provider:'cohere',limit:5000000,key:()=>CHK},
 ];
 const SWITCH_THRESHOLD=0.88; // switch at 88% of limit
 
