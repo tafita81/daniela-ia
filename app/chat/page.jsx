@@ -10,32 +10,64 @@ const STORAGE={
 
 // ── SETTINGS MODAL ─────────────────────────────────────────────────────────
 
-// ── TOKEN MONITOR ─────────────────────────────────────────────────────────
+// ── TOKEN MONITOR COMPLETO ────────────────────────────────────────────────
 function TokenMonitor(){
   const[st,setSt]=useState(null);
+  const[tick,setTick]=useState(0);
+  const[expanded,setExpanded]=useState(false);
+
   useEffect(()=>{
-    const fetch_=async()=>{
-      try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}
-    };
-    fetch_();
-    const id=setInterval(fetch_,15000); // atualiza a cada 15s
-    return()=>clearInterval(id);
+    const load=async()=>{try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}};
+    load();
+    const poll=setInterval(load,10000); // API poll a cada 10s
+    const timer=setInterval(()=>setTick(t=>t+1),1000); // countdown a cada 1s
+    return()=>{clearInterval(poll);clearInterval(timer);};
   },[]);
+
   if(!st)return null;
-  const{current,next,switch_event}=st;
-  const pct=current?.pct||0;
-  const color=pct<70?'#4ade80':pct<88?'#facc15':'#f87171';
-  const provider=current?.provider==='groq'?'🦙 Groq':current?.provider==='gemini'?'✨ Gemini':'🤖 IA';
+  const{current,next,switch_event,provider_status=[]}=st;
+  const pct=Math.min(current?.pct||0,100);
+  const color=pct<60?'#4ade80':pct<85?'#facc15':'#f87171';
+
+  const provIcon=(p)=>p==='groq'?'🦙':p==='gemini'?'✨':p==='cohere'?'🟡':p==='together'?'🔷':'🤖';
+  const shortName=(n='')=>n.replace('llama-3.3-70b-versatile','Llama 3.3').replace('llama-3.1-8b-instant','Llama 3.1').replace('gemini-2.0-flash','Gemini 2.0').replace('command-r-08-2024','Command-R').replace('Meta-Llama-3.1-8B-Instruct-Turbo','Llama 3.1 T').substring(0,14);
+
   return(
-    <div style={{padding:'4px 12px',borderBottom:'1px solid #1a1a1a',background:'#0a0a0a',display:'flex',alignItems:'center',gap:8,fontSize:11,flexWrap:'wrap'}}>
-      <span style={{color:'#6b7280'}}>IA ativa:</span>
-      <span style={{color:color,fontWeight:600}}>{provider} {current?.model?.replace('llama-','').replace('-versatile','').replace('gemini-1.5-','Gemini ').substring(0,15)}</span>
-      <div style={{flex:1,minWidth:80,height:4,background:'#222',borderRadius:2,overflow:'hidden'}}>
-        <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 1s',borderRadius:2}}/>
+    <div style={{borderBottom:'1px solid #1a1a1a',background:'#050505'}}>
+      {/* Barra principal */}
+      <div onClick={()=>setExpanded(e=>!e)} style={{padding:'5px 12px',display:'flex',alignItems:'center',gap:8,fontSize:11,cursor:'pointer',userSelect:'none'}}>
+        <span style={{color:'#6b7280',fontSize:10}}>IA:</span>
+        <span style={{color:color,fontWeight:700,fontSize:12}}>{provIcon(current?.provider)} {shortName(current?.model)}</span>
+        <div style={{flex:1,maxWidth:120,height:3,background:'#222',borderRadius:2,overflow:'hidden'}}>
+          <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 0.5s',borderRadius:2}}/>
+        </div>
+        <span style={{color:'#6b7280',fontSize:10}}>{pct}%</span>
+        <span style={{color:'#374151',fontSize:10}}>•</span>
+        <span style={{color:'#4b5563',fontSize:10}}>{current?.reset_in||'—'}</span>
+        {switch_event&&<span style={{color:'#a78bfa',fontSize:9,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>⚡{switch_event}</span>}
+        <span style={{color:'#374151',fontSize:9,marginLeft:'auto'}}>{expanded?'▲':'▼'}</span>
       </div>
-      <span style={{color:'#6b7280'}}>{(current?.remaining||0).toLocaleString()} tokens restantes</span>
-      {next&&<span style={{color:'#4b5563'}}>→ {next.model?.replace('llama-','').replace('-versatile','').replace('gemini-1.5-','Gemini ').substring(0,12)}</span>}
-      {switch_event&&<span style={{color:'#a78bfa',fontSize:10}}>⚡ {switch_event?.substring(0,40)}</span>}
+      {/* Painel expandido */}
+      {expanded&&(
+        <div style={{padding:'8px 12px',borderTop:'1px solid #111',display:'grid',gap:4}}>
+          <div style={{fontSize:10,color:'#6b7280',marginBottom:4}}>📊 Status de todas as IAs (switch automático a 85%)</div>
+          {provider_status.map((p,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 6px',borderRadius:4,background:p.active?'rgba(139,92,246,0.1)':'transparent',border:p.active?'1px solid rgba(139,92,246,0.2)':'1px solid transparent'}}>
+              <span style={{fontSize:12}}>{provIcon(p.provider)}</span>
+              <span style={{color:p.active?'#a78bfa':'#6b7280',fontSize:11,flex:1,fontWeight:p.active?600:400}}>{p.name||p.provider}</span>
+              {p.active&&<span style={{fontSize:9,color:'#4ade80',fontWeight:700}}>● ATIVO</span>}
+              <span style={{fontSize:10,color:'#374151'}}>reset: <span style={{color:p.active?'#facc15':'#4b5563'}}>{p.reset_in||'—'}</span></span>
+              <span style={{fontSize:10,color:'#1f2937'}}>{(p.limit/1000).toFixed(0)}k</span>
+            </div>
+          ))}
+          {next&&(
+            <div style={{marginTop:4,fontSize:10,color:'#4b5563'}}>
+              ⏭️ Próximo: {provIcon(next.provider)} {shortName(next.model)} • reset em {next.reset_in||'—'}
+            </div>
+          )}
+          <div style={{marginTop:4,fontSize:9,color:'#1f2937'}}>♾️ Loop infinito ativo — nunca para</div>
+        </div>
+      )}
     </div>
   );
 }
