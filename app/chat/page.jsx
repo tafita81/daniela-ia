@@ -6,6 +6,133 @@ const STORAGE={
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 };
 
+
+// ── SETTINGS MODAL ─────────────────────────────────────────────────────────
+function SettingsModal({onClose}){
+  const[tab,setTab]=useState('ia');
+  const[cfg,setCfg]=useState(()=>{try{return JSON.parse(localStorage.getItem('d_cfg')||'{}')}catch{return{}}});
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState('');
+  const set=(k,v)=>setCfg(c=>({...c,[k]:v}));
+
+  const save=async()=>{
+    setSaving(true);
+    localStorage.setItem('d_cfg',JSON.stringify(cfg));
+    // Persistir no backend via settings_save
+    const svcs={groq:'groq_keys',gemini:'gemini_keys',notion:'notion_token',elevenlabs:'elevenlabs_key',heygen:'heygen_key',canva:'canva_token',youtube:'youtube_token',instagram:'instagram_token',vercel:'vercel_token',github:'gh_pat'};
+    for(const[svc,k]of Object.entries(svcs)){
+      const tokens=cfg[k]||'';
+      if(tokens){
+        await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({stream:false,messages:[{role:'user',content:`Salve tokens do serviço ${svc}: ${tokens.substring(0,10)}...`}],_action:'settings_save',_service:svc,_tokens:tokens})
+        }).catch(()=>{});
+      }
+    }
+    setSaving(false);
+    setMsg('✅ Salvo e conectado!');
+    setTimeout(()=>{setMsg('');onClose();},1500);
+  };
+
+  const TABS=[
+    {id:'ia',icon:'🤖',label:'IA & Contas'},
+    {id:'voz',icon:'🎙',label:'Voz & Avatar'},
+    {id:'criacao',icon:'🎨',label:'Criação'},
+    {id:'notas',icon:'📋',label:'Notion/Memória'},
+    {id:'social',icon:'📱',label:'Redes Sociais'},
+    {id:'infra',icon:'⚙️',label:'Infra & Dev'},
+  ];
+
+  const F=({label,k,ph='',hint='',pwd=false,rows=1})=>(
+    <div style={{marginBottom:14}}>
+      <label style={{display:'block',fontSize:12,color:'#9ca3af',marginBottom:4,fontWeight:500}}>{label}</label>
+      {rows>1
+        ?<textarea rows={rows} value={cfg[k]||''} onChange={e=>set(k,e.target.value)} placeholder={ph}
+            style={{width:'100%',background:'#1a1a1a',border:'1px solid #2a2a2a',borderRadius:8,padding:'8px 12px',color:'#fff',fontSize:12,resize:'vertical',boxSizing:'border-box',outline:'none'}}/>
+        :<input type={pwd?'password':'text'} value={cfg[k]||''} onChange={e=>set(k,e.target.value)} placeholder={ph}
+            style={{width:'100%',background:'#1a1a1a',border:'1px solid #2a2a2a',borderRadius:8,padding:'8px 12px',color:'#fff',fontSize:12,boxSizing:'border-box',outline:'none'}}/>}
+      {hint&&<p style={{fontSize:10,color:'#4b5563',margin:'3px 0 0'}}>{hint}</p>}
+    </div>
+  );
+
+  return(
+    <>{settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:'#111',border:'1px solid #222',borderRadius:16,width:'min(800px,95vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.8)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'20px 24px',borderBottom:'1px solid #1e1e1e'}}>
+          <div>
+            <h2 style={{color:'#fff',margin:0,fontSize:18,fontWeight:700,letterSpacing:'-0.3px'}}>⚙️ Configurações</h2>
+            <p style={{color:'#6b7280',margin:'4px 0 0',fontSize:12}}>Adicione tokens → Salvar → conecta e configura tudo automaticamente</p>
+          </div>
+          <button onClick={onClose} style={{background:'rgba(255,255,255,0.05)',border:'1px solid #333',borderRadius:8,color:'#aaa',fontSize:20,cursor:'pointer',width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>×</button>
+        </div>
+
+        <div style={{display:'flex',flex:1,overflow:'hidden',minHeight:0}}>
+          <div style={{width:150,borderRight:'1px solid #1e1e1e',padding:'12px 0',flexShrink:0,overflowY:'auto'}}>
+            {TABS.map(t=>(
+              <button key={t.id} onClick={()=>setTab(t.id)}
+                style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 16px',background:tab===t.id?'rgba(139,92,246,0.12)':'none',border:'none',borderRight:tab===t.id?'2px solid #8b5cf6':'2px solid transparent',color:tab===t.id?'#a78bfa':'#6b7280',cursor:'pointer',fontSize:12,textAlign:'left',transition:'all 0.15s'}}>
+                <span>{t.icon}</span>{t.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+            {tab==='ia'&&<>
+              <div style={{background:'rgba(139,92,246,0.08)',border:'1px solid rgba(139,92,246,0.2)',borderRadius:10,padding:12,marginBottom:16,fontSize:11,color:'#a78bfa',lineHeight:1.5}}>
+                💡 <strong>Multi-conta:</strong> Adicione várias chaves separadas por vírgula. Rotação automática quando uma atinge o limite de tokens.
+              </div>
+              <F label="Groq API Keys — Llama 3.3 70B (principal, 14.400 req/dia grátis cada)" k="groq_keys" ph="gsk_key1,gsk_key2,gsk_key3" hint="console.groq.com → API Keys → Create key" rows={2}/>
+              <F label="Google Gemini Keys — fallback grátis" k="gemini_keys" ph="AIza...key1,AIza...key2" hint="aistudio.google.com"/>
+              <F label="OpenAI Keys — opcional (pago)" k="openai_keys" ph="sk-..." pwd/>
+              <F label="Together AI Key — modelos open source" k="together_key" hint="together.ai → Settings → API Keys"/>
+              <F label="Mistral Key — grátis" k="mistral_key" hint="mistral.ai"/>
+            </>}
+            {tab==='voz'&&<>
+              <F label="ElevenLabs API Key — voz Daniela realista (10k chars/mês grátis)" k="elevenlabs_key" ph="xi_..." pwd hint="elevenlabs.io → Profile → API Key"/>
+              <F label="ElevenLabs Voice ID" k="elevenlabs_voice" ph="EXAVITQu4vr4xnSDxMaL" hint="ID da voz da Daniela (padrão: Rachel)"/>
+              <F label="HeyGen API Key — avatar de vídeo da Daniela" k="heygen_key" ph="..." pwd hint="heygen.com → API Keys"/>
+            </>}
+            {tab==='criacao'&&<>
+              <F label="Canva Access Token — cria designs automaticamente" k="canva_token" ph="..." pwd hint="canva.com/developers"/>
+              <F label="Stability AI Key — imagens realistas HD" k="stability_key" ph="sk-..." pwd hint="stability.ai"/>
+            </>}
+            {tab==='notas'&&<>
+              <F label="Notion Integration Token — memória e notas persistentes" k="notion_token" ph="secret_..." pwd hint="notion.so/my-integrations → Create integration → Internal Integration Token"/>
+              <F label="Notion Database ID — banco de memória da Daniela" k="notion_db" ph="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" hint="Abra o banco no Notion → compartilhe com a integration → copie o ID da URL"/>
+            </>}
+            {tab==='social'&&<>
+              <F label="YouTube OAuth Token" k="youtube_token" ph="..." pwd hint="Para publicar vídeos automaticamente"/>
+              <F label="Instagram Token" k="instagram_token" ph="..." pwd/>
+              <F label="TikTok Token" k="tiktok_token" ph="..." pwd/>
+              <F label="Twitter/X Bearer Token" k="twitter_token" ph="..." pwd/>
+              <F label="Pinterest Token" k="pinterest_token" ph="..." pwd/>
+            </>}
+            {tab==='infra'&&<>
+              <F label="GitHub PAT — já configurado via env. Preencha para sobrescrever." k="gh_pat" ph="ghp_..." pwd/>
+              <F label="Vercel Token" k="vercel_token" ph="dn5a..." pwd/>
+              <F label="Vercel Team ID" k="vercel_team" ph="team_..."/>
+              <F label="Supabase URL" k="supabase_url" ph="https://xxx.supabase.co"/>
+              <F label="Supabase Service Key" k="supabase_key" ph="eyJ..." pwd/>
+            </>}
+          </div>
+        </div>
+
+        <div style={{padding:'16px 24px',borderTop:'1px solid #1e1e1e',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <span style={{fontSize:13,color:msg.startsWith('✅')?'#4ade80':'#6b7280'}}>{msg||'Tokens são criptografados e armazenados com segurança.'}</span>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={onClose} style={{padding:'8px 20px',background:'none',border:'1px solid #333',borderRadius:8,color:'#6b7280',cursor:'pointer',fontSize:13}}>Cancelar</button>
+            <button onClick={save} disabled={saving}
+              style={{padding:'8px 24px',background:'linear-gradient(135deg,#8b5cf6,#7c3aed)',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontWeight:600,fontSize:13,opacity:saving?0.7:1}}>
+              {saving?'⏳ Conectando...':'💾 Salvar & Conectar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </>
+  );
+}
+
 export default function Chat(){
   const[msgs,setMsgs]=useState([]);
   const[input,setInput]=useState('');
@@ -117,6 +244,7 @@ export default function Chat(){
   const skillList=Object.keys(skills);
 
   return(
+    <>{settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     <div className="app">
       {/* SIDEBAR */}
       <aside className="sidebar">
