@@ -1,3 +1,4 @@
+import React from 'react';
 export const metadata = { title: 'Daniela IA', description: 'Assistente IA avançada' };
 export default function RootLayout({ children }) {
   return (
