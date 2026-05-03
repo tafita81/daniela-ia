@@ -10,7 +10,85 @@ const STORAGE={
 
 // ── SETTINGS MODAL ─────────────────────────────────────────────────────────
 
-// ── TOKEN MONITOR COMPLETO ────────────────────────────────────────────────
+// ── TOKEN MONITOR V2 — Ordem otimizada + emojis ──────────────────────────
+function TokenMonitor(){
+  const[st,setSt]=useState(null);
+  const[expanded,setExpanded]=useState(false);
+  const[tick,setTick]=useState(0);
+
+  useEffect(()=>{
+    const load=async()=>{try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}};
+    load();
+    const poll=setInterval(load,10000);
+    const timer=setInterval(()=>setTick(t=>t+1),1000);
+    return()=>{clearInterval(poll);clearInterval(timer);};
+  },[]);
+
+  if(!st)return null;
+  const{current,provider_status=[],switch_event,chain=[]}=st;
+  const pct=Math.min(current?.pct||0,100);
+  const pctLeft=100-pct;
+  const color=pct<60?'#4ade80':pct<88?'#facc15':'#f87171';
+
+  return(
+    <div style={{borderBottom:'1px solid #111',background:'#030303',fontFamily:'monospace'}}>
+      {/* Barra clicável */}
+      <div onClick={()=>setExpanded(e=>!e)}
+        style={{padding:'4px 10px',display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer',userSelect:'none'}}>
+        {/* Emoji + modelo ativo */}
+        <span style={{fontSize:13}}>{provider_status.find(p=>p.active)?.emoji||'🤖'}</span>
+        <span style={{color:color,fontWeight:700}}>
+          {(provider_status.find(p=>p.active)?.name||current?.model||'').replace('llama-3.3-70b-versatile','Llama 3.3 70B').substring(0,16)}
+        </span>
+        {/* Barra de progresso */}
+        <div style={{flex:1,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden',maxWidth:100}}>
+          <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 0.5s',borderRadius:2}}/>
+        </div>
+        <span style={{color:'#4b5563',fontSize:10}}>{pct}%</span>
+        <span style={{color:'#1f2937',fontSize:10}}>·</span>
+        {/* Reset countdown */}
+        <span style={{color:'#374151',fontSize:10}}>⏱ {current?.reset_in||'—'}</span>
+        {/* Switch event */}
+        {switch_event&&<span style={{color:'#7c3aed',fontSize:9,maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginLeft:2}}>⚡{switch_event.substring(0,45)}</span>}
+        <span style={{color:'#1f2937',fontSize:9,marginLeft:'auto'}}>{expanded?'▲':'▼'}</span>
+      </div>
+
+      {/* Painel expandido: todas as IAs */}
+      {expanded&&(
+        <div style={{borderTop:'1px solid #0d0d0d',padding:'6px 10px',display:'flex',flexDirection:'column',gap:3}}>
+          <div style={{fontSize:9,color:'#374151',marginBottom:2,letterSpacing:'0.05em'}}>
+            CADEIA DE IAs — switch a 88% · loop infinito ♾️
+          </div>
+          {chain.map((p,i)=>{
+            const isActive=p.active;
+            const lineColor=isActive?color:'#1f2937';
+            const textColor=isActive?'#e5e7eb':'#4b5563';
+            const limitStr=p.limit>=1000000?`${(p.limit/1000000).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`;
+            return(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:5,
+                padding:'2px 6px',borderRadius:3,
+                background:isActive?'rgba(124,58,237,0.08)':'transparent',
+                border:`1px solid ${isActive?'rgba(124,58,237,0.2)':'transparent'}`}}>
+                <span style={{fontSize:11,width:14,textAlign:'center',opacity:isActive?1:0.5}}>{p.emoji||'🤖'}</span>
+                <span style={{fontSize:9,color:'#374151',width:10}}>#{p.position||i+1}</span>
+                <span style={{flex:1,fontSize:10,color:textColor,fontWeight:isActive?700:400}}>
+                  {(p.label||p.name||'').substring(0,18)}
+                </span>
+                {isActive&&<span style={{fontSize:8,color:'#4ade80',fontWeight:700,letterSpacing:'0.05em'}}>ATIVO</span>}
+                <span style={{fontSize:9,color:'#374151'}}>{limitStr}</span>
+                <span style={{fontSize:9,color:isActive?'#facc15':'#1f2937'}}>~{p.reset_in||'—'}</span>
+              </div>
+            );
+          })}
+          <div style={{marginTop:4,fontSize:9,color:'#1f2937',paddingLeft:2}}>
+            Cohere: 5M tokens/mês · Gemini reset ~8h após Groq · Together: créditos separados
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TokenMonitor(){
   const[st,setSt]=useState(null);
   const[tick,setTick]=useState(0);
