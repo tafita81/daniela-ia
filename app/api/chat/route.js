@@ -524,7 +524,7 @@ async function groqCall(msgs,tools,activeKey){const gk=activeKey||GK;
   return r.json();
 }
 async function geminiCall(msgs){
-  // Try env key first, then Supabase stored key
+  // Retorna null silenciosamente em qualquer erro — fallback automático para próxima IA
   let gemKey=GEK;
   if(!gemKey&&SBU&&SBK){
     try{
@@ -533,11 +533,10 @@ async function geminiCall(msgs){
       if(kd[0]?.value)gemKey=kd[0].value;
     }catch(e){}
   }
-  if(!gemKey)return'❌ Gemini não configurado. Verifique GEMINI_API_KEY.';
+  if(!gemKey)return null;
   try{
-    // Clean messages for Gemini (remove tool_calls, tool roles, system)
     const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
-    if(!cleanMsgs.length)return'❌ Sem mensagens para processar';
+    if(!cleanMsgs.length)return null;
     const contents=cleanMsgs.map(m=>({
       role:m.role==='assistant'?'model':'user',
       parts:[{text:typeof m.content==='string'&&m.content.trim()?m.content:'...'}]
@@ -548,9 +547,9 @@ async function geminiCall(msgs){
     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gemKey}`,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
     const d=await r.json();
-    if(!r.ok)return`❌ Gemini erro ${r.status}: ${d.error?.message||JSON.stringify(d).substring(0,100)}`;
-    return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gemini: sem resposta';
-  }catch(e){return`❌ Gemini erro: ${e.message}`;}
+    if(!r.ok)return null; // 429, 403, etc → null → próxima IA
+    return d.candidates?.[0]?.content?.parts?.[0]?.text||null;
+  }catch(e){return null;}
 }
 
 
@@ -721,11 +720,23 @@ export async function POST(req){
               iter++;
               const gr=await groqStream(fMsgs,TOOLS,req.signal);
               if(!gr.ok){
+        // Groq falhou (rate limit) → tenta próximas IAs silenciosamente
         let fb=null;
-        for(const fn of[()=>cohereCall(fMsgs),()=>geminiCall(fMsgs),()=>togetherCall(fMsgs)]){
-          try{fb=await fn();if(fb)break;}catch(e){}
+        const fbOrder=[
+          {name:'cohere',fn:()=>cohereCall(fMsgs)},
+          {name:'gemini',fn:()=>geminiCall(fMsgs)},
+          {name:'together',fn:()=>togetherCall(fMsgs)},
+        ];
+        for(const p of fbOrder){
+          try{
+            fb=await p.fn();
+            if(fb&&fb.length>2){
+              send({type:'text',content:`_[usando ${p.name}]_\n\n${fb}`});
+              break;
+            }
+          }catch(e){}
         }
-        send({type:'text',content:fb||'⏳ Todos os tokens esgotados temporariamente. Reseta em breve!'});
+        if(!fb)send({type:'text',content:'⏳ Todos os modelos de IA estão no limite agora. Volta em alguns minutos automaticamente!'});
         break;
       }
               const reader=gr.body.getReader();const dec=new TextDecoder();
