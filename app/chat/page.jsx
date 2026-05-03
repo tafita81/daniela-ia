@@ -148,6 +148,8 @@ export default function Chat(){
   const[newConn,setNewConn]=useState({name:'',url:'',token:''});
   const[newSkill,setNewSkill]=useState({name:'',content:''});
   const[speaking,setSpeaking]=useState(false);
+  const[settingsOpen,setSettingsOpen]=useState(false);
+  const[activeModel,setActiveModel]=useState('llama-3.3-70b-versatile');
   const[useQwen,setUseQwen]=useState(false);
   const[sessionId]=useState(()=>Date.now().toString(36));
   const bottomRef=useRef(null);const taRef=useRef(null);const fileRef=useRef(null);const abortRef=useRef(null);
