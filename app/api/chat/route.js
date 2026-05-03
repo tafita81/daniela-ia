@@ -677,6 +677,39 @@ export async function GET(){
 export async function POST(req){
   try{
     const body=await req.json();
+
+    // ── CONNECTOR ACTIONS (save/load/remove tokens permanently) ────────────
+    if(body._action==='connector_save'&&body._service&&body._token){
+      if(SBU&&SBK){
+        await fetch(`${SBU}/rest/v1/ia_cache`,{method:'POST',
+          headers:{apikey:SBK,Authorization:`Bearer ${SBK}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
+          body:JSON.stringify({cache_key:`connector_${body._service}`,value:JSON.stringify({token:body._token,saved_at:new Date().toISOString()}),
+            expires_at:'2099-12-31T00:00:00Z'})});
+      }
+      return NextResponse.json({ok:true,saved:body._service});
+    }
+    if(body._action==='connector_remove'&&body._service){
+      if(SBU&&SBK){
+        await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.connector_${body._service}`,{method:'DELETE',
+          headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});
+      }
+      return NextResponse.json({ok:true,removed:body._service});
+    }
+    if(body._action==='connectors_load'){
+      const connectors={};
+      if(SBU&&SBK){
+        const r=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=like.connector_%&select=cache_key,value`,
+          {headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}}).catch(()=>null);
+        if(r?.ok){
+          const rows=await r.json();
+          for(const row of rows||[]){
+            const svcId=row.cache_key.replace('connector_','');
+            try{connectors[svcId]=JSON.parse(row.value);}catch(e){}
+          }
+        }
+      }
+      return NextResponse.json({ok:true,connectors});
+    }
     // Token-aware model selection
     const tokenState=await getActiveModel(body.model);
     const activeModelName=tokenState.model;
