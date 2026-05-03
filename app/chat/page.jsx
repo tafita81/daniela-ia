@@ -362,10 +362,18 @@ export default function Chat(){
 
   async function handleFile(e){
     const f=e.target.files[0];if(!f)return;
-    if(f.name.toLowerCase().endsWith('.zip')){setFile({name:f.name,type:'application/zip',data:null,preview:null,isZip:true,size:f.size});return;}
+    const nm=f.name.toLowerCase();
+    const isZip=nm.endsWith('.zip');
+    const isImg=f.type.startsWith('image/');
+    if(isZip){
+      setFile({name:f.name,type:'application/zip',data:null,preview:null,isZip:true,size:f.size,
+        note:`📦 ${f.name} (${(f.size/1024).toFixed(0)}KB) — ZIP anexado`});
+      return;
+    }
     const reader=new FileReader();
-    reader.onload=ev=>setFile({name:f.name,type:f.type,data:ev.target.result,preview:f.type.startsWith('image/')?ev.target.result:null});
-    reader.readAsDataURL(f);
+    reader.onload=ev=>setFile({name:f.name,type:f.type,data:ev.target.result,
+      preview:isImg?ev.target.result:null,size:f.size});
+    if(isImg)reader.readAsDataURL(f); else reader.readAsText(f).catch(()=>reader.readAsDataURL(f));
   }
 
   async function send(){
@@ -465,9 +473,7 @@ export default function Chat(){
         </header>
 
         {/* PANELS */}
-                {panel==='connectors'&&(
-          <ConnectorsPanel onClose={()=>setPanel(null)} apiPath='/api/chat'/>
-        )}
+                {panel==='connectors'&&(<ConnectorsPanel onClose={()=>setPanel(null)} apiPath='/api/chat'/>)}
         
         {panel==='skills'&&(
           <div className="pnl">
