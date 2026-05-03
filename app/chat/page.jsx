@@ -11,44 +11,64 @@ const STORAGE={
 // ── SETTINGS MODAL ─────────────────────────────────────────────────────────
 
 // ── TOKEN MONITOR V2 ─────────────────────────────────────────────────────
-function TokenMonitor(){
-  const[st,setSt]=useState(null);
-  const[exp,setExp]=useState(false);
+function StatusBar(){
+  const[health,setHealth]=useState(null);
+  const[tokenSt,setTokenSt]=useState(null);
+  const[now,setNow]=useState(new Date());
+  const[expanded,setExpanded]=useState(false);
   useEffect(()=>{
-    const go=async()=>{try{const r=await fetch('/api/chat');setSt(await r.json());}catch(e){}};
-    go();const t=setInterval(go,10000);return()=>clearInterval(t);
+    const clock=setInterval(()=>setNow(new Date()),1000);
+    const checkHealth=async()=>{try{const r=await fetch('/api/health');if(r.ok)setHealth(await r.json());}catch(e){}};
+    const checkTokens=async()=>{try{const r=await fetch('/api/chat');if(r.ok)setTokenSt(await r.json());}catch(e){}};
+    checkHealth();checkTokens();
+    const h=setInterval(checkHealth,30000);
+    const t=setInterval(checkTokens,10000);
+    return()=>{clearInterval(clock);clearInterval(h);clearInterval(t);};
   },[]);
-  if(!st)return null;
-  const c=st.current||{};const chain=st.chain||[];const se=st.switch_event;
-  const pct=Math.min(c.pct||0,100);
-  const col=pct<60?'#4ade80':pct<88?'#facc15':'#f87171';
-  const act=chain.find(x=>x.active)||{};
-  const row=(p,i)=>(
-    <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 6px',marginBottom:1,borderRadius:3,background:p.active?'rgba(124,58,237,0.08)':'transparent',border:p.active?'1px solid rgba(124,58,237,0.2)':'1px solid transparent'}}>
-      <span style={{width:14,textAlign:'center',opacity:p.active?1:0.4}}>{p.emoji||'🤖'}</span>
-      <span style={{fontSize:9,color:'#374151',width:12}}>#{i+1}</span>
-      <span style={{flex:1,fontSize:10,color:p.active?'#e5e7eb':'#4b5563',fontWeight:p.active?700:400}}>{(p.label||p.name||'').substring(0,20)}</span>
-      {p.active&&<span style={{fontSize:8,color:'#4ade80'}}>●ATIVO</span>}
-      <span style={{fontSize:9,color:'#1f2937'}}>{p.limit>=1e6?`${(p.limit/1e6).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`}</span>
-      <span style={{fontSize:9,color:p.active?'#facc15':'#1f2937'}}>{p.reset_in||'—'}</span>
-    </div>
-  );
+  const timeStr=now.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const dateStr=now.toLocaleDateString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit'});
+  const provIcon=(p)=>p==='groq'?'🦙':p==='gemini'?'✨':p==='cohere'?'🟡':p==='together'?'🔷':'🤖';
+  const shortModel=(n='')=>n.replace('llama-3.3-70b-versatile','Llama 3.3').replace('llama-3.1-8b-instant','Llama 3.1').replace('gemini-2.0-flash','Gemini 2.0').replace('command-r-08-2024','Command-R').replace('Meta-Llama-3.1-8B-Instruct-Turbo','Llama 3.1T').split('/').pop().substring(0,14);
+  const cur=tokenSt?.current||{};
+  const pct=Math.min(cur.pct||0,100);
+  const barColor=pct<60?'#4ade80':pct<85?'#facc15':'#f87171';
+  const activeProvider=cur.provider||'groq';
+  const dotColor=health?.health?.[activeProvider]?.ok?'#4ade80':health?.health?.[activeProvider]?.ok===false?'#f87171':'#6b7280';
+  const okCount=health?.health?Object.values(health.health).filter(h=>h.ok).length:0;
+  const totalCount=health?.health?Object.keys(health.health).length:4;
   return(
     <div style={{borderBottom:'1px solid #111',background:'#030303'}}>
-      <div onClick={()=>setExp(e=>!e)} style={{padding:'4px 10px',display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer',userSelect:'none'}}>
-        <span>{act.emoji||'🤖'}</span>
-        <span style={{color:col,fontWeight:700}}>{(act.label||c.model||'').substring(0,16)}</span>
-        <div style={{width:80,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden'}}>
-          <div style={{width:`${pct}%`,height:'100%',background:col,transition:'width 0.5s'}}/>
+      <div onClick={()=>setExpanded(e=>!e)} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',cursor:'pointer'}}>
+        <div style={{width:7,height:7,borderRadius:'50%',background:dotColor,flexShrink:0,boxShadow:`0 0 4px ${dotColor}`}}/>
+        <span style={{color:barColor,fontWeight:700,fontSize:12,flexShrink:0}}>{provIcon(activeProvider)} {shortModel(cur.model)}</span>
+        <div style={{width:55,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden',flexShrink:0}}>
+          <div style={{width:`${pct}%`,height:'100%',background:barColor,borderRadius:2,transition:'width 0.5s'}}/>
         </div>
-        <span style={{color:'#4b5563',fontSize:10}}>{pct}% · {c.reset_in||'—'}</span>
-        {se&&<span style={{color:'#7c3aed',fontSize:9,overflow:'hidden',maxWidth:100,whiteSpace:'nowrap',textOverflow:'ellipsis'}}>⚡{se.substring(0,40)}</span>}
-        <span style={{color:'#1f2937',fontSize:9,marginLeft:'auto'}}>{exp?'▲':'▼'}</span>
+        <span style={{color:'#4b5563',fontSize:10,flexShrink:0}}>{pct}% · {cur.reset_in||'—'}</span>
+        <span style={{color:okCount>0?'#4ade80':'#f87171',fontSize:10,flexShrink:0,marginLeft:4}}>{okCount}/{totalCount} ✓</span>
+        <span style={{marginLeft:'auto',color:'#374151',fontSize:9,fontFamily:'monospace',flexShrink:0}}>{timeStr} {dateStr}</span>
+        <span style={{color:'#1f2937',fontSize:9,flexShrink:0}}>{expanded?'▲':'▼'}</span>
       </div>
-      {exp&&(
-        <div style={{borderTop:'1px solid #0d0d0d',padding:'6px 10px'}}>
-          <div style={{fontSize:9,color:'#374151',marginBottom:4}}>CADEIA · switch 88% · ♾️</div>
-          {chain.map(row)}
+      {expanded&&(
+        <div style={{padding:'8px 10px 10px',borderTop:'1px solid #0a0a0a'}}>
+          <div style={{fontSize:9,color:'#374151',marginBottom:5}}>🔄 24/7 · switch automático a 85% · health a cada 30s</div>
+          {health?.health&&Object.entries(health.health).map(([name,h])=>{
+            const isActive=name===activeProvider;
+            const ts=tokenSt?.provider_status?.find(p=>p.provider===name);
+            return(
+              <div key={name} style={{display:'flex',alignItems:'center',gap:5,padding:'3px 6px',marginBottom:2,borderRadius:3,
+                background:isActive?'rgba(139,92,246,0.08)':'transparent',border:isActive?'1px solid rgba(139,92,246,0.12)':'1px solid transparent'}}>
+                <div style={{width:5,height:5,borderRadius:'50%',background:h.ok?'#4ade80':'#f87171',flexShrink:0}}/>
+                <span style={{fontSize:10}}>{provIcon(name)}</span>
+                <span style={{color:isActive?'#a78bfa':h.ok?'#6b7280':'#374151',fontSize:10,flex:1,fontWeight:isActive?600:400}}>
+                  {name.charAt(0).toUpperCase()+name.slice(1)}{isActive?' ●':''}
+                </span>
+                {h.ok?<span style={{fontSize:9,color:'#4ade80'}}>✓ {h.ms}ms</span>:<span style={{fontSize:9,color:'#f87171'}}>✗ {(h.error||'erro').substring(0,20)}</span>}
+                <span style={{fontSize:9,color:'#1f2937'}}>reset:{ts?.reset_in||'—'}</span>
+              </div>
+            );
+          })}
+          {tokenSt?.switch_event&&<div style={{marginTop:4,fontSize:9,color:'#a78bfa'}}>⚡ {tokenSt.switch_event}</div>}
         </div>
       )}
     </div>
@@ -103,7 +123,7 @@ function SettingsModal({onClose}){
 
   return(
     <>
-      <TokenMonitor/>
+      <StatusBar/>
       {settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:'#111',border:'1px solid #222',borderRadius:16,width:'min(800px,95vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.8)'}}>
@@ -296,7 +316,7 @@ export default function Chat(){
 
   return(
     <>
-      <TokenMonitor/>
+      <StatusBar/>
       {settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     <div className="app">
       {/* SIDEBAR */}
