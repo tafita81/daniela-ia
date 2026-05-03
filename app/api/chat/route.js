@@ -755,15 +755,20 @@ export async function POST(req){
     if(Object.keys(skills).length){sysMsgs.push({role:'system',content:`SKILLS: ${Object.entries(skills).map(([k,v])=>`[${k}]: ${v.substring(0,150)}`).join(' | ')}`});}
     let chatMsgs=messages.map(m=>({...m,content:typeof m.content==='string'?m.content:JSON.stringify(m.content)}));
     if(chatMsgs.length>20)chatMsgs=chatMsgs.slice(-20);
-    // Handle ZIP/file content passed in messages
+    // Handle ZIP/file content
     if(body.fileContent&&body.fileName){
       const fname=body.fileName.toLowerCase();
-      let fileNote='';
-      if(fname.endsWith('.zip'))fileNote=`[Arquivo ZIP recebido: ${body.fileName}. Não posso extrair ZIPs diretamente, mas posso ajudar a entender seu conteúdo se você descrever o que há dentro.]`;
-      else fileNote=`[Arquivo recebido: ${body.fileName} (${body.fileContent.length} bytes)]`;
+      const sz=body.fileSize?(body.fileSize/1024).toFixed(0)+'KB':'';
+      let note=fname.endsWith('.zip')
+        ?`[📦 ZIP anexado: ${body.fileName} ${sz} — descreva o conteúdo ou extraia para eu analisar]`
+        :`[📎 Arquivo: ${body.fileName} ${sz}]`;
       if(chatMsgs.length>0&&chatMsgs[chatMsgs.length-1].role==='user'){
-        chatMsgs[chatMsgs.length-1].content+='\n'+fileNote;
+        chatMsgs[chatMsgs.length-1].content+='\n'+note;
       }
+    }
+    // Handle file note from ZIP
+    if(body.fileNote&&chatMsgs.length>0&&chatMsgs[chatMsgs.length-1].role==='user'){
+      chatMsgs[chatMsgs.length-1].content+='\n'+body.fileNote;
     }
     if(image&&chatMsgs.length>0){const last=chatMsgs[chatMsgs.length-1];if(last.role==='user')chatMsgs[chatMsgs.length-1]={...last,content:`${last.content}\n[Imagem anexada]`};}
     const allMsgs=[...sysMsgs,...chatMsgs];
