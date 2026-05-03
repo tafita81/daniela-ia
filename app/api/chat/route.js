@@ -453,18 +453,24 @@ async function geminiCall(msgs){
 }
 
 
-// Cohere free API fallback (api.cohere.com - requires free key)
+// Cohere free API fallback (5M tokens/month free)
 const CHK=process.env.COHERE_API_KEY||'';
 async function cohereCall(msgs){
   if(!CHK)return null;
   try{
-    const prompt=msgs.filter(m=>m.role!=='system').map(m=>`${m.role==='assistant'?'Chatbot':'User'}: ${m.content||''}`).join('\n')+'\nChatbot:';
-    const r=await fetch('https://api.cohere.com/v1/generate',{method:'POST',
+    // Use v2 chat API (newer format)
+    const chatMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls)
+      .map(m=>({role:m.role==='assistant'?'assistant':'user',content:String(m.content||'...')}));
+    if(!chatMsgs.length)return null;
+    const sysMsg=msgs.find(m=>m.role==='system');
+    const body={model:'command-r-plus',messages:chatMsgs,max_tokens:1000,temperature:0.7};
+    if(sysMsg)body.system=sysMsg.content;
+    const r=await fetch('https://api.cohere.com/v2/chat',{method:'POST',
       headers:{Authorization:`Bearer ${CHK}`,'Content-Type':'application/json'},
-      body:JSON.stringify({model:'command',prompt,max_tokens:1000,temperature:0.7}),
-      signal:AbortSignal.timeout(20000)});
+      body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
     const d=await r.json();
-    return d.generations?.[0]?.text||null;
+    if(!r.ok)return null;
+    return d.message?.content?.[0]?.text||d.text||null;
   }catch(e){return null;}
 }
 
