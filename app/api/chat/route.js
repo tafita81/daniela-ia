@@ -423,10 +423,24 @@ async function groqCall(msgs,tools,activeKey){const gk=activeKey||GK;
   return r.json();
 }
 async function geminiCall(msgs){
-  if(!GEK)return'❌ Sem API configurada';
-  const contents=msgs.filter(m=>m.role!=='system').map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:typeof m.content==='string'?m.content:JSON.stringify(m.content)}]}));
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEK}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{maxOutputTokens:4096}})});
-  const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text||'Erro Gemini';
+  if(!GEK)return'❌ Gemini não configurado. Verifique GEMINI_API_KEY.';
+  try{
+    // Clean messages for Gemini (remove tool_calls, tool roles, system)
+    const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
+    if(!cleanMsgs.length)return'❌ Sem mensagens para processar';
+    const contents=cleanMsgs.map(m=>({
+      role:m.role==='assistant'?'model':'user',
+      parts:[{text:typeof m.content==='string'&&m.content.trim()?m.content:'...'}]
+    }));
+    const systemMsg=msgs.find(m=>m.role==='system');
+    const body={contents,generationConfig:{maxOutputTokens:4096,temperature:0.7}};
+    if(systemMsg)body.systemInstruction={parts:[{text:systemMsg.content}]};
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEK}`,
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    const d=await r.json();
+    if(!r.ok)return`❌ Gemini erro ${r.status}: ${d.error?.message||JSON.stringify(d).substring(0,100)}`;
+    return d.candidates?.[0]?.content?.parts?.[0]?.text||'Gemini: sem resposta';
+  }catch(e){return`❌ Gemini erro: ${e.message}`;} Gemini';
 }
 
 const SYSTEM=`Você é Daniela Coelho, IA avançada V15 com acesso COMPLETO ao ambiente de desenvolvimento.
@@ -490,6 +504,16 @@ export async function POST(req){
     if(Object.keys(skills).length){sysMsgs.push({role:'system',content:`SKILLS: ${Object.entries(skills).map(([k,v])=>`[${k}]: ${v.substring(0,150)}`).join(' | ')}`});}
     let chatMsgs=messages.map(m=>({...m,content:typeof m.content==='string'?m.content:JSON.stringify(m.content)}));
     if(chatMsgs.length>20)chatMsgs=chatMsgs.slice(-20);
+    // Handle ZIP/file content passed in messages
+    if(body.fileContent&&body.fileName){
+      const fname=body.fileName.toLowerCase();
+      let fileNote='';
+      if(fname.endsWith('.zip'))fileNote=`[Arquivo ZIP recebido: ${body.fileName}. Não posso extrair ZIPs diretamente, mas posso ajudar a entender seu conteúdo se você descrever o que há dentro.]`;
+      else fileNote=`[Arquivo recebido: ${body.fileName} (${body.fileContent.length} bytes)]`;
+      if(chatMsgs.length>0&&chatMsgs[chatMsgs.length-1].role==='user'){
+        chatMsgs[chatMsgs.length-1].content+='\n'+fileNote;
+      }
+    }
     if(image&&chatMsgs.length>0){const last=chatMsgs[chatMsgs.length-1];if(last.role==='user')chatMsgs[chatMsgs.length-1]={...last,content:`${last.content}\n[Imagem anexada]`};}
     const allMsgs=[...sysMsgs,...chatMsgs];
 
