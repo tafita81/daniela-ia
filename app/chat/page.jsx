@@ -454,14 +454,9 @@ export default function Chat(){
 
         {/* PANELS */}
                 {panel==='connectors'&&(
-          <div className="pnl" style={{width:'min(400px,96vw)',maxHeight:'85vh',overflowY:'auto'}}>
-            <div className="pnl-hdr"><span>🔌 Conectores</span><button onClick={()=>setPanel(null)}>✕</button></div>
-            <div style={{padding:'10px 14px',borderBottom:'1px solid #111',fontSize:11,color:'#6b7280'}}>
-              Conecte serviços externos. Tokens salvos no Supabase para sempre.
-            </div>
-            <ConnectorsList connectors={connectors} setConnectors={setConnectors}/>
-          </div>
+          <ConnectorsPanel onClose={()=>setPanel(null)} apiPath='/api/chat'/>
         )}
+        
         {panel==='skills'&&(
           <div className="pnl">
             <div className="pnl-hdr"><span>🧠 Skills</span><button onClick={()=>setPanel(null)}>✕</button></div>
