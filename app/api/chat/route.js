@@ -556,26 +556,30 @@ async function geminiCall(msgs){
 // Cohere free API fallback (5M tokens/month free)
 const CHK=process.env.COHERE_API_KEY||'cohere_KJFdijk5qzPXeIb1asnrMo7iaKtVui337fjIgEYQ2vMfd5';
 async function cohereCall(msgs){
-  if(!CHK)return null;
+  const key=CHK||'cohere_KJFdijk5qzPXeIb1asnrMo7iaKtVui337fjIgEYQ2vMfd5';
+  if(!key)return null;
   try{
-    // Use v2 chat API (newer format)
-    const chatMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls)
-      .map(m=>({role:m.role==='assistant'?'assistant':'user',content:String(m.content||'...')}));
-    if(!chatMsgs.length)return null;
-    const sysMsg=msgs.find(m=>m.role==='system');
-    if(sysMsg&&chatMsgs.length&&chatMsgs[0].role!=='system')chatMsgs.unshift({role:'system',content:sysMsg.content});
-    const body={model:'command-r-08-2024',messages:chatMsgs,max_tokens:1000,temperature:0.7};
-    if(sysMsg)body.system=sysMsg.content;
-    const r=await fetch('https://api.cohere.com/v2/chat',{method:'POST',
-      headers:{Authorization:`Bearer ${CHK}`,'Content-Type':'application/json'},
-      body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
-    const d=await r.json();
-    if(!r.ok)return null;
-    return d.message?.content?.[0]?.text||d.text||null;
+    // Cohere v2: apenas user/assistant/system no array
+    const clean=msgs
+      .filter(m=>m.role!=='tool'&&!m.tool_calls)
+      .map(m=>{
+        const role=m.role==='assistant'?'assistant':m.role==='system'?'system':'user';
+        return{role,content:String(m.content||'...').substring(0,2000)};
+      })
+      .filter(m=>m.content.trim().length>0);
+    if(!clean.filter(m=>m.role==='user').length)return null;
+    const res=await fetch('https://api.cohere.com/v2/chat',{
+      method:'POST',
+      headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},
+      body:JSON.stringify({model:'command-r-08-2024',messages:clean,max_tokens:800,temperature:0.7}),
+      signal:AbortSignal.timeout(30000)
+    });
+    if(!res.ok)return null;
+    const d=await res.json();
+    return d?.message?.content?.[0]?.text||null;
   }catch(e){return null;}
 }
 
-// Gemini Pro as extra fallback
 async function geminiProCall(msgs){
   if(!GEK)return null;
   try{
