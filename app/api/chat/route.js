@@ -1,4 +1,4 @@
-// @deploy 1777845651
+// @deploy 1777846568 — env-vars-refreshed
 // @ts-nocheck
 // app/api/chat/route.js — DANIELA V15 — Claude Code parity: GitHub+Vercel+Supabase+Self-Optimize
 import{NextResponse}from'next/server';
