@@ -9,6 +9,37 @@ const STORAGE={
 
 
 // ── SETTINGS MODAL ─────────────────────────────────────────────────────────
+
+// ── TOKEN MONITOR ─────────────────────────────────────────────────────────
+function TokenMonitor(){
+  const[st,setSt]=useState(null);
+  useEffect(()=>{
+    const fetch_=async()=>{
+      try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}
+    };
+    fetch_();
+    const id=setInterval(fetch_,15000); // atualiza a cada 15s
+    return()=>clearInterval(id);
+  },[]);
+  if(!st)return null;
+  const{current,next,switch_event}=st;
+  const pct=current?.pct||0;
+  const color=pct<70?'#4ade80':pct<88?'#facc15':'#f87171';
+  const provider=current?.provider==='groq'?'🦙 Groq':current?.provider==='gemini'?'✨ Gemini':'🤖 IA';
+  return(
+    <div style={{padding:'4px 12px',borderBottom:'1px solid #1a1a1a',background:'#0a0a0a',display:'flex',alignItems:'center',gap:8,fontSize:11,flexWrap:'wrap'}}>
+      <span style={{color:'#6b7280'}}>IA ativa:</span>
+      <span style={{color:color,fontWeight:600}}>{provider} {current?.model?.replace('llama-','').replace('-versatile','').replace('gemini-1.5-','Gemini ').substring(0,15)}</span>
+      <div style={{flex:1,minWidth:80,height:4,background:'#222',borderRadius:2,overflow:'hidden'}}>
+        <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 1s',borderRadius:2}}/>
+      </div>
+      <span style={{color:'#6b7280'}}>{(current?.remaining||0).toLocaleString()} tokens restantes</span>
+      {next&&<span style={{color:'#4b5563'}}>→ {next.model?.replace('llama-','').replace('-versatile','').replace('gemini-1.5-','Gemini ').substring(0,12)}</span>}
+      {switch_event&&<span style={{color:'#a78bfa',fontSize:10}}>⚡ {switch_event?.substring(0,40)}</span>}
+    </div>
+  );
+}
+
 function SettingsModal({onClose}){
   const[tab,setTab]=useState('ia');
   const[cfg,setCfg]=useState(()=>{try{return JSON.parse(localStorage.getItem('d_cfg')||'{}')}catch{return{}}});
@@ -56,7 +87,9 @@ function SettingsModal({onClose}){
   );
 
   return(
-    <>{settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
+    <>
+      <TokenMonitor/>
+      {settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.8)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(4px)'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={{background:'#111',border:'1px solid #222',borderRadius:16,width:'min(800px,95vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.8)'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'20px 24px',borderBottom:'1px solid #1e1e1e'}}>
@@ -247,7 +280,9 @@ export default function Chat(){
   const skillList=Object.keys(skills);
 
   return(
-    <>{settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
+    <>
+      <TokenMonitor/>
+      {settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     <div className="app">
       {/* SIDEBAR */}
       <aside className="sidebar">
