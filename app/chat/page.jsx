@@ -377,6 +377,103 @@ function ConnectorsPanel({onClose,apiPath='/api/chat'}){
 }
 
 
+
+// ── SESSION HISTORY PANEL — guarda tudo no Supabase + localStorage ───────
+function SessionHistoryPanel({onClose,onLoad,currentSessionId,apiPath='/api/chat'}){
+  const[sessions,setSessions]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[search,setSearch]=useState('');
+
+  useEffect(()=>{
+    // 1. Carrega de localStorage IMEDIATAMENTE
+    const local=STORAGE.get('daniela_sessions',[]);
+    setSessions(local);
+    
+    // 2. Carrega de Supabase (sync com nuvem)
+    fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_action:'sessions_list',_user_id:'tafita81',messages:[]})})
+      .then(r=>r.json()).then(d=>{
+        if(d.sessions&&d.sessions.length){
+          // Merge: cloud + local, dedupe por id
+          const map=new Map();
+          local.forEach(s=>map.set(s.id,s));
+          d.sessions.forEach(s=>map.set(s.id,{id:s.id,title:s.title,ts:new Date(s.updated_at).getTime(),msg_count:s.msg_count}));
+          const merged=Array.from(map.values()).sort((a,b)=>(b.ts||0)-(a.ts||0));
+          setSessions(merged);
+          STORAGE.set('daniela_sessions',merged);
+        }
+        setLoading(false);
+      }).catch(()=>setLoading(false));
+  },[]);
+
+  const filtered=sessions.filter(s=>!search||(s.title||'').toLowerCase().includes(search.toLowerCase()));
+
+  const loadSession=async(s)=>{
+    // Se tem msgs em local, usa; senão busca do Supabase
+    if(s.msgs&&s.msgs.length){onLoad(s);return;}
+    const r=await fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_action:'session_load',_user_id:'tafita81',_session_id:s.id,messages:[]})});
+    const d=await r.json();
+    if(d.session?.msgs)onLoad({...s,msgs:d.session.msgs});
+    else onLoad(s);
+  };
+
+  const deleteSession=async(s,e)=>{
+    e.stopPropagation();
+    if(!confirm(`Apagar "${s.title}"?`))return;
+    fetch(apiPath,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_action:'session_delete',_user_id:'tafita81',_session_id:s.id,messages:[]})}).catch(()=>{});
+    const next=sessions.filter(x=>x.id!==s.id);
+    setSessions(next);STORAGE.set('daniela_sessions',next);
+  };
+
+  const fmt=(ts)=>{const d=new Date(ts);const today=new Date();
+    if(d.toDateString()===today.toDateString())return`hoje ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`;
+    const y=new Date(today);y.setDate(y.getDate()-1);
+    if(d.toDateString()===y.toDateString())return'ontem';
+    return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  };
+
+  return(
+    <div className="pnl" style={{width:'min(380px,95vw)',maxHeight:'85vh',display:'flex',flexDirection:'column'}}>
+      <div className="pnl-hdr" style={{flexShrink:0}}>
+        <span>📋 Histórico <span style={{fontSize:10,color:'#4ade80',marginLeft:4}}>{sessions.length} sessões</span></span>
+        <button onClick={onClose}>✕</button>
+      </div>
+      <div style={{padding:'8px 12px',borderBottom:'1px solid #111',flexShrink:0}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Buscar..."
+          style={{width:'100%',background:'#111',border:'1px solid #222',borderRadius:5,padding:'6px 10px',color:'#e5e7eb',fontSize:12,outline:'none'}}/>
+      </div>
+      <div style={{overflowY:'auto',flex:1}}>
+        {loading&&sessions.length===0&&<div style={{padding:20,color:'#6b7280',fontSize:12,textAlign:'center'}}>Carregando histórico...</div>}
+        {filtered.length===0&&!loading&&<div style={{padding:20,color:'#6b7280',fontSize:12,textAlign:'center'}}>Nenhuma sessão ainda. Comece um chat!</div>}
+        {filtered.map(s=>(
+          <div key={s.id} onClick={()=>loadSession(s)}
+            style={{padding:'10px 14px',borderBottom:'1px solid #0a0a0a',cursor:'pointer',
+              background:s.id===currentSessionId?'rgba(139,92,246,0.08)':'transparent',
+              display:'flex',alignItems:'center',gap:8,transition:'background 0.1s'}}
+            onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.03)'}
+            onMouseLeave={e=>e.currentTarget.style.background=s.id===currentSessionId?'rgba(139,92,246,0.08)':'transparent'}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:500,color:'#e5e7eb',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.title||'Chat'}</div>
+              <div style={{fontSize:10,color:'#6b7280',marginTop:2}}>
+                {fmt(s.ts||Date.now())} · {s.msg_count||(s.msgs?.length)||0} msgs
+              </div>
+            </div>
+            <button onClick={(e)=>deleteSession(s,e)} style={{background:'transparent',border:'none',color:'#4b5563',cursor:'pointer',fontSize:13,padding:'4px 6px',borderRadius:4,opacity:0.6}}
+              onMouseEnter={e=>{e.currentTarget.style.color='#f87171';e.currentTarget.style.opacity='1';}}
+              onMouseLeave={e=>{e.currentTarget.style.color='#4b5563';e.currentTarget.style.opacity='0.6';}}>🗑</button>
+          </div>
+        ))}
+      </div>
+      <div style={{padding:'6px 10px',fontSize:10,color:'#374151',borderTop:'1px solid #0a0a0a',textAlign:'center',flexShrink:0}}>
+        ☁️ Sincronizado · 💾 Local + Nuvem
+      </div>
+    </div>
+  );
+}
+
+
 function StatusBar(){
   const[health,setHealth]=useState(null);
   const[tokenSt,setTokenSt]=useState(null);
@@ -593,10 +690,13 @@ export default function Chat(){
 
   function saveSession(m){
     if(!m.length)return;
-    const s={id:sessionId,title:m[0]?.content?.substring(0,35)||'Chat',msgs:m,ts:Date.now()};
+    const s={id:sessionId,title:m[0]?.content?.substring(0,60)||'Chat',msgs:m,ts:Date.now()};
     const prev=STORAGE.get('daniela_sessions',[]).filter(x=>x.id!==sessionId);
-    const updated=[s,...prev].slice(0,20);
+    const updated=[s,...prev].slice(0,100);
     STORAGE.set('daniela_sessions',updated);setSessions(updated);
+    // Sync para Supabase em background (nunca bloqueia UI)
+    fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_action:'session_save',_user_id:'tafita81',_session_id:sessionId,_title:s.title,messages:m})}).catch(()=>{});
   }
   function saveConnectors(c){STORAGE.set('daniela_connectors',c);setConnectors(c);}
   function saveSkills(s){STORAGE.set('daniela_skills',s);setSkills(s);}
@@ -718,7 +818,7 @@ export default function Chat(){
         <header className="hdr">
           <div className="hm"><div className="ha">D</div><span>Daniela</span></div>
           <div className="hbtns">
-            <button className={`hb${panel==='history'?' hp':''}`} onClick={()=>setPanel(p=>p==='history'?null:'history')} title="Histórico">📋</button>
+            <button className={`hb${panel==='history'?' hp':''}`} onClick={()=>setPanel(p=>p==='history'?null:'history')} title="Histórico de sessões (sincronizado na nuvem)">📋<span style={{fontSize:8,marginLeft:2,color:'#4ade80'}}>●</span></button>
             <button className={`hb${panel==='skills'?' hp':''}`} onClick={()=>setPanel(p=>p==='skills'?null:'skills')} title="Skills">{skillList.length?`🧠${skillList.length}`:'🧠'}</button>
             <button className={`hb${panel==='connectors'?' hp':''}`} onClick={()=>setPanel(p=>p==='connectors'?null:'connectors')} title="Conectores MCP">{connList.length?`🔌${connList.length}`:'🔌'}</button>
             <button className={`hb${useQwen?' hp':''}`} onClick={()=>setUseQwen(q=>!q)} title="Qwen 3 (OpenRouter)">{useQwen?'🤖Q3':'🤖'}</button>
@@ -727,7 +827,8 @@ export default function Chat(){
         </header>
 
         {/* PANELS */}
-                {panel==='connectors'&&(<ConnectorsPanel onClose={()=>setPanel(null)} apiPath='/api/chat'/>)}
+                {panel==='history'&&(<SessionHistoryPanel onClose={()=>setPanel(null)} onLoad={s=>{setMsgs(s.msgs||[]);setPanel(null);}} currentSessionId={sessionId} apiPath='/api/chat'/>)}
+        {panel==='connectors'&&(<ConnectorsPanel onClose={()=>setPanel(null)} apiPath='/api/chat'/>)}
         
         {panel==='skills'&&(
           <div className="pnl">
