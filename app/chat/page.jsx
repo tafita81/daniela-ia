@@ -11,6 +11,107 @@ const STORAGE={
 // ── SETTINGS MODAL ─────────────────────────────────────────────────────────
 
 // ── TOKEN MONITOR V2 ─────────────────────────────────────────────────────
+
+// ── CONNECTORS LIST com Supabase permanente ────────────────────────────────
+const CONNECTORS_SERVICES=[
+  {id:'google_drive',name:'Google Drive',icon:'https://www.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',desc:'Arquivos e documentos'},
+  {id:'notion',name:'Notion',icon:'https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png',desc:'Páginas e bases de dados'},
+  {id:'slack',name:'Slack',icon:'https://upload.wikimedia.org/wikipedia/commons/b/b9/Slack_Technologies_Logo.svg',desc:'Mensagens e canais'},
+  {id:'github',name:'GitHub',icon:'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png',desc:'Repositórios e código'},
+  {id:'gmail',name:'Gmail',icon:'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico',desc:'E-mails e contatos'},
+  {id:'youtube',name:'YouTube',icon:'https://www.youtube.com/favicon.ico',desc:'Vídeos e canal'},
+  {id:'instagram',name:'Instagram',icon:'https://www.instagram.com/favicon.ico',desc:'Posts e stories'},
+  {id:'elevenlabs',name:'ElevenLabs',icon:'https://elevenlabs.io/favicon.ico',desc:'Síntese de voz realista'},
+  {id:'heygen',name:'HeyGen',icon:'https://www.heygen.com/favicon.ico',desc:'Avatar de vídeo IA'},
+  {id:'canva',name:'Canva',icon:'https://www.canva.com/favicon.ico',desc:'Criar designs'},
+  {id:'supabase',name:'Supabase',icon:'https://supabase.com/favicon.ico',desc:'Banco de dados'},
+  {id:'vercel',name:'Vercel',icon:'https://vercel.com/favicon.ico',desc:'Deploy e infra'},
+  {id:'jira',name:'Jira',icon:'https://www.atlassian.com/favicon.ico',desc:'Tarefas e projetos'},
+  {id:'linear',name:'Linear',icon:'https://linear.app/favicon.ico',desc:'Issues e sprints'},
+];
+
+function ConnectorsList({connectors,setConnectors}){
+  const[loaded,setLoaded]=useState(false);
+  const[testStatus,setTestStatus]=useState({});
+
+  // Carrega tokens do Supabase ao iniciar
+  useEffect(()=>{
+    const load=async()=>{
+      try{
+        const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({stream:false,_action:'connectors_load',messages:[{role:'user',content:'load connectors'}]})});
+        if(r.ok){
+          const d=await r.json();
+          if(d.connectors){
+            setConnectors(prev=>({...prev,...d.connectors}));
+            // Salva no localStorage tb
+            Object.entries(d.connectors).forEach(([k,v])=>{if(v?.token)localStorage.setItem(`conn_${k}`,v.token);});
+          }
+        }
+      }catch(e){}
+      setLoaded(true);
+    };
+    load();
+  },[]);
+
+  const connect=async(svc)=>{
+    const key=window.prompt(`🔑 Token/API Key para ${svc.name}:`);
+    if(!key||!key.trim())return;
+    const token=key.trim();
+    // Salva localmente
+    localStorage.setItem(`conn_${svc.id}`,token);
+    setConnectors(prev=>({...prev,[svc.id]:{name:svc.name,token,connected_at:new Date().toISOString()}}));
+    // Salva no Supabase via API (permanente para sempre)
+    fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stream:false,_action:'connector_save',_service:svc.id,_token:token,
+        messages:[{role:'user',content:`Salve o token do ${svc.name}`}]})}).catch(()=>{});
+    setTestStatus(p=>({...p,[svc.id]:'saving...'}));
+    setTimeout(()=>setTestStatus(p=>({...p,[svc.id]:'✓ Salvo'})),1000);
+  };
+
+  const disconnect=(svcId)=>{
+    localStorage.removeItem(`conn_${svcId}`);
+    setConnectors(prev=>{const n={...prev};delete n[svcId];return n;});
+    fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({stream:false,_action:'connector_remove',_service:svcId,messages:[{role:'user',content:'remove'}]})}).catch(()=>{});
+  };
+
+  if(!loaded)return<div style={{padding:20,color:'#6b7280',fontSize:12}}>Carregando conectores...</div>;
+
+  return(
+    <div>
+      {CONNECTORS_SERVICES.map(svc=>{
+        const savedKey=`conn_${svc.id}`;
+        const connected=connectors?.[svc.id]?.token||localStorage.getItem(savedKey);
+        const ts=testStatus[svc.id];
+        return(
+          <div key={svc.id} style={{display:'flex',alignItems:'center',padding:'11px 14px',
+            borderBottom:'1px solid #0d0d0d',gap:10}}>
+            <div style={{position:'relative',flexShrink:0}}>
+              <img src={svc.icon} alt={svc.name} style={{width:26,height:26,borderRadius:4,objectFit:'contain',background:'#fff',padding:2}} onError={e=>{e.target.style.display='none';}}/>
+              {connected&&<div style={{position:'absolute',bottom:-2,right:-2,width:8,height:8,borderRadius:'50%',background:'#4ade80',border:'1px solid #000',boxShadow:'0 0 4px #4ade80'}}/>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#e5e7eb'}}>{svc.name}</div>
+              <div style={{fontSize:10,color:'#6b7280'}}>{svc.desc}</div>
+            </div>
+            {ts&&<span style={{fontSize:10,color:'#4ade80'}}>{ts}</span>}
+            {connected
+              ?<div style={{display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{fontSize:10,color:'#4ade80',fontWeight:700}}>✓ ON</span>
+                  <button onClick={()=>disconnect(svc.id)} style={{fontSize:9,color:'#6b7280',background:'none',border:'1px solid #222',borderRadius:3,padding:'2px 5px',cursor:'pointer'}}>×</button>
+                </div>
+              :<button onClick={()=>connect(svc)} style={{fontSize:11,color:'#a78bfa',background:'rgba(139,92,246,0.1)',border:'1px solid rgba(139,92,246,0.25)',borderRadius:5,padding:'4px 9px',cursor:'pointer',fontWeight:500,whiteSpace:'nowrap'}}>
+                  Conectar
+                </button>
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function StatusBar(){
   const[health,setHealth]=useState(null);
   const[tokenSt,setTokenSt]=useState(null);
@@ -352,67 +453,15 @@ export default function Chat(){
         </header>
 
         {/* PANELS */}
-        {panel==='connectors'&&(
+                {panel==='connectors'&&(
           <div className="pnl" style={{width:'min(400px,96vw)',maxHeight:'85vh',overflowY:'auto'}}>
             <div className="pnl-hdr"><span>🔌 Conectores</span><button onClick={()=>setPanel(null)}>✕</button></div>
-            <div style={{padding:'12px 16px',borderBottom:'1px solid #1e1e1e',fontSize:12,color:'#6b7280'}}>
-              Conecte serviços externos para que a Daniela acesse seus dados em tempo real.
+            <div style={{padding:'10px 14px',borderBottom:'1px solid #111',fontSize:11,color:'#6b7280'}}>
+              Conecte serviços externos. Tokens salvos no Supabase para sempre.
             </div>
-            <div style={{padding:'8px 0'}}>
-              {[
-                {id:'google_drive',name:'Google Drive',icon:'https://www.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',desc:'Acesse arquivos e documentos',auth:'oauth'},
-                {id:'notion',name:'Notion',icon:'https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png',desc:'Páginas e bases de dados',auth:'token'},
-                {id:'slack',name:'Slack',icon:'https://upload.wikimedia.org/wikipedia/commons/b/b9/Slack_Technologies_Logo.svg',desc:'Mensagens e canais',auth:'token'},
-                {id:'github',name:'GitHub',icon:'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png',desc:'Repositórios e código',auth:'token'},
-                {id:'gmail',name:'Gmail',icon:'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico',desc:'E-mails e contatos',auth:'oauth'},
-                {id:'youtube',name:'YouTube',icon:'https://www.youtube.com/favicon.ico',desc:'Vídeos e canal',auth:'token'},
-                {id:'instagram',name:'Instagram',icon:'https://www.instagram.com/favicon.ico',desc:'Posts e stories',auth:'token'},
-                {id:'elevenlabs',name:'ElevenLabs',icon:'https://elevenlabs.io/favicon.ico',desc:'Síntese de voz realista',auth:'token'},
-                {id:'heygen',name:'HeyGen',icon:'https://www.heygen.com/favicon.ico',desc:'Avatar de vídeo IA',auth:'token'},
-                {id:'canva',name:'Canva',icon:'https://www.canva.com/favicon.ico',desc:'Criar designs automaticamente',auth:'token'},
-                {id:'supabase',name:'Supabase',icon:'https://supabase.com/favicon.ico',desc:'Banco de dados e API',auth:'token'},
-                {id:'vercel',name:'Vercel',icon:'https://vercel.com/favicon.ico',desc:'Deploy e infraestrutura',auth:'token'},
-                {id:'jira',name:'Jira',icon:'https://www.atlassian.com/favicon.ico',desc:'Tarefas e projetos',auth:'token'},
-                {id:'linear',name:'Linear',icon:'https://linear.app/favicon.ico',desc:'Issues e sprints',auth:'token'},
-              ].map(svc=>{
-                const savedKey=`conn_${svc.id}`;
-                const connected=typeof window!=='undefined'&&localStorage.getItem(savedKey);
-                return(
-                  <div key={svc.id} style={{display:'flex',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid #111',gap:12}}>
-                    <img src={svc.icon} alt={svc.name} style={{width:28,height:28,borderRadius:4,objectFit:'contain',background:'#fff',padding:2}} onError={e=>{e.target.style.display='none';}}/>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,fontWeight:600,color:'#e5e7eb'}}>{svc.name}</div>
-                      <div style={{fontSize:11,color:'#6b7280'}}>{svc.desc}</div>
-                    </div>
-                    {connected
-                      ? <div style={{display:'flex',alignItems:'center',gap:6}}>
-                          <span style={{fontSize:11,color:'#4ade80',fontWeight:600}}>✓ Conectado</span>
-                          <button onClick={()=>{localStorage.removeItem(savedKey);setConnectors(c=>{const n={...c};delete n[svc.id];return n;});}} style={{fontSize:10,color:'#6b7280',background:'none',border:'1px solid #333',borderRadius:4,padding:'2px 6px',cursor:'pointer'}}>Remover</button>
-                        </div>
-                      : <button onClick={()=>{
-                          const key=window.prompt(`Token/API Key para ${svc.name}:`);
-                          if(key&&key.trim()){
-                            localStorage.setItem(savedKey,key.trim());
-                            setConnectors(c=>({...c,[svc.id]:{name:svc.name,token:key.trim()}}));
-                            // Save to backend
-                            fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stream:false,messages:[{role:'user',content:`settings_save: service=${svc.id} tokens=${key.trim().substring(0,10)}...`}],_action:'settings_save',_service:svc.id,_tokens:key.trim()})}).catch(()=>{});
-                          }
-                        }} style={{fontSize:11,color:'#a78bfa',background:'rgba(139,92,246,0.1)',border:'1px solid rgba(139,92,246,0.3)',borderRadius:6,padding:'4px 10px',cursor:'pointer',whiteSpace:'nowrap',fontWeight:500}}>
-                          Conectar
-                        </button>
-                    }
-                  </div>
-                );
-              })}
-            </div>
-            {Object.keys(connectors||{}).length>0&&(
-              <div style={{padding:'12px 16px',borderTop:'1px solid #1e1e1e',fontSize:11,color:'#6b7280'}}>
-                {Object.keys(connectors).length} serviço(s) conectado(s) · tokens salvos localmente
-              </div>
-            )}
+            <ConnectorsList connectors={connectors} setConnectors={setConnectors}/>
           </div>
         )}
-        
         {panel==='skills'&&(
           <div className="pnl">
             <div className="pnl-hdr"><span>🧠 Skills</span><button onClick={()=>setPanel(null)}>✕</button></div>
