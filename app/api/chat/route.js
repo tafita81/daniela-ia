@@ -725,7 +725,7 @@ export async function POST(req){
         if(body._action==='connectors_load'){
           const connectors={};
           if(SBU&&SBK){
-            const rr=await fetch(`${SBU}/rest/v1/ia_cache?select=cache_key,value&cache_key=like.conn_${encodeURIComponent('%')}`,
+            const rr=await fetch(`${SBU}/rest/v1/ia_cache?select=cache_key,value&cache_key=like.conn_%`,
               {headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}}).catch(()=>null);
             if(rr?.ok){
               const rows=await rr.json().catch(()=>[]);
