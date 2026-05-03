@@ -12,13 +12,61 @@ const REPO='tafita81/Repovazio',VER='V15-ULTRA-2026-05-03';
 
 // ── TOKEN MONITORING & MULTI-MODEL FALLBACK ─────────────────────────────
 // Limits per model (daily for Groq free, per-minute for others)
+// ── TOGETHER AI ─────────────────────────────────────────────────────────
+const TGK=process.env.TOGETHER_API_KEY||'';
+async function togetherCall(msgs){
+  if(!TGK)return null;
+  try{
+    const cleanMsgs=msgs.filter(m=>m.role!=='tool'&&!m.tool_calls).map(m=>({role:m.role,content:String(m.content||'...')}));
+    const r=await fetch('https://api.together.xyz/v1/chat/completions',{method:'POST',
+      headers:{Authorization:`Bearer ${TGK}`,'Content-Type':'application/json'},
+      body:JSON.stringify({model:'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',messages:cleanMsgs,max_tokens:1000,temperature:0.7}),
+      signal:AbortSignal.timeout(25000)});
+    const d=await r.json();
+    if(!r.ok)return null;
+    return d.choices?.[0]?.message?.content||null;
+  }catch(e){return null;}
+}
+
+// ── PROVIDER CHAIN com reset times ──────────────────────────────────────
+// resetType: 'daily_utc' = reseta meia-noite UTC, 'daily_pt' = meia-noite PT (8h UTC), 'monthly' = 1º do mês, 'credits' = por crédito
 const MODEL_CHAIN=[
-  {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK},
-  {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK},
-  {name:'gemini-2.0-flash',provider:'gemini',limit:1500,key:()=>GEK},
-  {name:'command-r-08-2024',provider:'cohere',limit:5000000,key:()=>CHK},
+  {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc'},
+  {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc'},
+  {name:'gemini-2.0-flash',provider:'gemini',limit:1500,key:()=>GEK,resetType:'daily_pt'},
+  {name:'command-r-08-2024',provider:'cohere',limit:5000000,key:()=>CHK,resetType:'monthly'},
+  {name:'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',provider:'together',limit:1000000,key:()=>TGK,resetType:'credits'},
 ];
-const SWITCH_THRESHOLD=0.88; // switch at 88% of limit
+const SWITCH_THRESHOLD=0.85; // switch proativo a 85%
+
+// Calcula tempo de reset para cada provider em ms
+function getResetTimeMs(resetType){
+  const now=new Date();
+  if(resetType==='daily_utc'){
+    const next=new Date(now);next.setUTCHours(24,0,0,0);return next.getTime()-now.getTime();
+  }
+  if(resetType==='daily_pt'){
+    // PT = UTC-8, então reseta às 8h UTC
+    const next=new Date(now);
+    const h=now.getUTCHours();
+    if(h<8)next.setUTCHours(8,0,0,0);
+    else{next.setUTCDate(next.getUTCDate()+1);next.setUTCHours(8,0,0,0);}
+    return next.getTime()-now.getTime();
+  }
+  if(resetType==='monthly'){
+    const next=new Date(now.getFullYear(),now.getMonth()+1,1,0,0,0,0);
+    return next.getTime()-now.getTime();
+  }
+  return 3600000; // credits: assume 1h
+}
+
+function formatTimeLeft(ms){
+  if(ms<=0)return'disponível agora';
+  const h=Math.floor(ms/3600000);const m=Math.floor((ms%3600000)/60000);
+  if(h>24)return`${Math.floor(h/24)}d ${h%24}h`;
+  if(h>0)return`${h}h ${m}min`;
+  return`${m}min`;
+}
 
 async function getTokenState(){
   if(!SBU||!SBK)return{model:'llama-3.3-70b-versatile',used:0,limit:100000,chain_idx:0};
@@ -41,25 +89,69 @@ async function saveTokenState(state){
 
 async function updateTokenUsage(tokensEstimate){
   const state=await getTokenState();
-  // Reset daily if needed (Groq resets every 24h)
-  if(state.provider==='groq'&&Date.now()-state.last_reset>86400000){
-    state.used=0;state.last_reset=Date.now();
-  }
   state.used=(state.used||0)+tokensEstimate;
-  // Check if need to switch model
   const m=MODEL_CHAIN[state.chain_idx||0];
-  if(m&&state.used>=(m.limit*SWITCH_THRESHOLD)){
-    const nextIdx=(state.chain_idx+1)%MODEL_CHAIN.length;
+  
+  // Auto-reset: verifica se já passou o tempo de reset do provider atual
+  if(m&&state.last_reset){
+    const resetMs=getResetTimeMs(m.resetType||'daily_utc');
+    const timeSinceReset=Date.now()-(state.last_reset||0);
+    const fullCycle=86400000; // 24h
+    if(m.resetType==='daily_utc'&&timeSinceReset>fullCycle){
+      // Reset do Groq! volta ao início
+      state.chain_idx=0;state.model=MODEL_CHAIN[0].name;state.provider=MODEL_CHAIN[0].provider;
+      state.used=tokensEstimate;state.last_reset=Date.now();
+      state.switch_event=`♻️ Auto-reset Groq diário — voltando ao modelo principal`;
+    }
+  }
+  
+  // Proactive switch a 85%
+  const curr=MODEL_CHAIN[state.chain_idx||0];
+  if(curr&&state.used>=(curr.limit*SWITCH_THRESHOLD)){
+    // Calcular reset times de todos os providers para escolher o melhor
+    const providerResets=MODEL_CHAIN.map((mm,i)=>({
+      idx:i, name:mm.name, provider:mm.provider,
+      resetMs:getResetTimeMs(mm.resetType||'daily_utc'),
+      available:i!==state.chain_idx
+    }));
+    
+    // Tenta próximo na cadeia primeiro
+    let nextIdx=(state.chain_idx+1)%MODEL_CHAIN.length;
     const next=MODEL_CHAIN[nextIdx];
+    
+    // Salva reset time do provider atual para monitoramento
+    const resetMsAtSwitch=getResetTimeMs(curr.resetType||'daily_utc');
+    
     state.chain_idx=nextIdx;
     state.model=next.name;
     state.provider=next.provider;
     state.used=0;
     state.last_reset=Date.now();
     state.switched_at=new Date().toISOString();
-    // Save checkpoint for continuation
-    state.switch_event=`Switched from ${m.name} to ${next.name} at ${new Date().toLocaleString('pt-BR')}`;
+    state.switch_event=`⚡ ${curr.name.split('/').pop()} → ${next.name.split('/').pop()} | Reset ${curr.provider} em ${formatTimeLeft(resetMsAtSwitch)}`;
+    
+    // Guardar reset times de todos os providers
+    state.provider_resets=providerResets.map(p=>({
+      provider:p.provider, name:p.name.split('/').pop(),
+      reset_in:formatTimeLeft(p.resetMs), reset_ms:p.resetMs
+    }));
   }
+  
+  // Se chegou ao fim da cadeia, encontra o que vai resetar primeiro
+  if(state.chain_idx===MODEL_CHAIN.length-1&&state.used>=(MODEL_CHAIN[state.chain_idx].limit*SWITCH_THRESHOLD)){
+    const earliest=MODEL_CHAIN.reduce((best,mm,i)=>{
+      const ms=getResetTimeMs(mm.resetType||'daily_utc');
+      return(!best||ms<best.ms)?{idx:i,ms,provider:mm.provider,name:mm.name}:best;
+    },null);
+    if(earliest){
+      state.chain_idx=earliest.idx;
+      state.model=earliest.name;
+      state.provider=earliest.provider;
+      state.used=0;state.last_reset=Date.now();
+      state.switch_event=`♾️ Ciclo completo! Retomando ${earliest.name.split('/').pop()} (resetou ${formatTimeLeft(earliest.ms)})`;
+    }
+  }
+  
   await saveTokenState(state);
   return state;
 }
@@ -518,17 +610,51 @@ Frontend: app/chat/page.jsx | Backend: app/api/chat/route.js`;
 // Handle GET for token status dashboard
 export async function GET(){
   const state=await getTokenState();
-  const m=MODEL_CHAIN[state.chain_idx||0];
+  const idx=state.chain_idx||0;
+  const m=MODEL_CHAIN[idx];
   const pct=Math.round(((state.used||0)/(m?.limit||100000))*100);
-  const next=MODEL_CHAIN[(state.chain_idx+1)%MODEL_CHAIN.length];
+  const next=MODEL_CHAIN[(idx+1)%MODEL_CHAIN.length];
+  
+  // Calcular reset times em tempo real para todos os providers
+  const providerStatus=MODEL_CHAIN.map((mm,i)=>({
+    name:mm.name.split('/').pop().replace('-versatile','').replace('-instant',''),
+    full_name:mm.name,
+    provider:mm.provider,
+    active:i===idx,
+    reset_in:formatTimeLeft(getResetTimeMs(mm.resetType||'daily_utc')),
+    reset_ms:getResetTimeMs(mm.resetType||'daily_utc'),
+    reset_type:mm.resetType||'daily_utc',
+    limit:mm.limit,
+  }));
+  
   return NextResponse.json({
     ok:true,
-    current:{model:state.model||m?.name,provider:state.provider||m?.provider,used:state.used||0,limit:m?.limit||100000,pct,remaining:(m?.limit||100000)-(state.used||0)},
-    next:{model:next?.name,provider:next?.provider},
+    current:{
+      model:state.model||m?.name,
+      provider:state.provider||m?.provider,
+      used:state.used||0,
+      limit:m?.limit||100000,
+      pct:Math.min(pct,100),
+      remaining:(m?.limit||100000)-(state.used||0),
+      reset_in:formatTimeLeft(getResetTimeMs(m?.resetType||'daily_utc')),
+    },
+    next:{
+      model:next?.name,
+      provider:next?.provider,
+      reset_in:formatTimeLeft(getResetTimeMs(next?.resetType||'daily_utc')),
+    },
     switch_at:Math.round((m?.limit||100000)*SWITCH_THRESHOLD),
+    switch_threshold_pct:Math.round(SWITCH_THRESHOLD*100),
     switched_at:state.switched_at||null,
     switch_event:state.switch_event||null,
-    chain:MODEL_CHAIN.map((mm,i)=>({...mm,active:i===state.chain_idx})),
+    provider_status:providerStatus,
+    chain:MODEL_CHAIN.map((mm,i)=>({
+      name:mm.name.split('/').pop(),
+      provider:mm.provider,
+      limit:mm.limit,
+      active:i===idx,
+      reset_in:formatTimeLeft(getResetTimeMs(mm.resetType||'daily_utc')),
+    })),
     updated_at:state.updated_at||null,
   });
 }
