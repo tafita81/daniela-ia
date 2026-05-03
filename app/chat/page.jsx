@@ -34,17 +34,27 @@ function ConnectorsList({connectors,setConnectors}){
   const[loaded,setLoaded]=useState(false);
   const[testStatus,setTestStatus]=useState({});
 
-  // Carrega tokens do Supabase ao iniciar
+  // Carrega tokens: localStorage PRIMEIRO (imediato), depois Supabase (permanente)
   useEffect(()=>{
+    // 1. Carrega localStorage imediatamente (sempre funciona)
+    const lsConns={};
+    CONNECTORS_SERVICES.forEach(svc=>{
+      const tok=localStorage.getItem(`conn_${svc.id}`);
+      if(tok)lsConns[svc.id]={token:tok,name:svc.name,source:'local'};
+    });
+    if(Object.keys(lsConns).length>0)setConnectors(lsConns);
+    
+    // 2. Tenta carregar do Supabase (merge — adiciona novos tokens de outros dispositivos)
     const load=async()=>{
       try{
         const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({stream:false,_action:'connectors_load',messages:[{role:'user',content:'load connectors'}]})});
+          body:JSON.stringify({stream:false,_action:'connectors_load',messages:[]})});
         if(r.ok){
           const d=await r.json();
-          if(d.connectors){
+          if(d.connectors&&Object.keys(d.connectors).length>0){
+            // Merge: Supabase wins for existing, keeps localStorage-only entries
             setConnectors(prev=>({...prev,...d.connectors}));
-            // Salva no localStorage tb
+            // Sync Supabase tokens to localStorage
             Object.entries(d.connectors).forEach(([k,v])=>{if(v?.token)localStorage.setItem(`conn_${k}`,v.token);});
           }
         }
@@ -52,6 +62,7 @@ function ConnectorsList({connectors,setConnectors}){
       setLoaded(true);
     };
     load();
+    setLoaded(true); // Don't block on Supabase
   },[]);
 
   const connect=async(svc)=>{
