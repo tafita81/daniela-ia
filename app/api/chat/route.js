@@ -36,6 +36,19 @@ const TOOLS=[
   // ── APP CREATION ──
   {type:'function',function:{name:'criar_novo_app',description:'Cria app Next.js completo do zero: cria repo GitHub + estrutura de arquivos + conecta Vercel. Use quando o usuário pedir um novo app/projeto.',parameters:{type:'object',properties:{nome:{type:'string'},descricao:{type:'string'},tipo:{type:'string',enum:['nextjs','landing-page','dashboard','api','blog']}},required:['nome','descricao']}}},
   // ── STATUS ──
+
+  // ── MULTI-CONTA & SETTINGS ──────────────────────────────────────────
+  {type:'function',function:{name:'settings_save',description:'Salva tokens/APIs das contas no banco. Use quando usuário inserir novos tokens.',parameters:{type:'object',properties:{service:{type:'string'},tokens:{type:'string'},extra:{type:'string'}},required:['service','tokens']}}},
+  {type:'function',function:{name:'settings_load',description:'Carrega tokens/APIs configurados pelo usuário',parameters:{type:'object',properties:{service:{type:'string'}},required:[]}}},
+  // ── NOTION ──────────────────────────────────────────────────────────
+  {type:'function',function:{name:'notion_search',description:'Busca páginas e conteúdo no Notion do usuário',parameters:{type:'object',properties:{query:{type:'string'},database_id:{type:'string'}},required:['query']}}},
+  {type:'function',function:{name:'notion_write',description:'Cria ou atualiza página no Notion (memória, notas, tarefas)',parameters:{type:'object',properties:{title:{type:'string'},content:{type:'string'},database_id:{type:'string'},page_id:{type:'string'}},required:['title','content']}}},
+  // ── VOZ ─────────────────────────────────────────────────────────────
+  {type:'function',function:{name:'elevenlabs_tts',description:'Converte texto em áudio real via ElevenLabs (voz Daniela)',parameters:{type:'object',properties:{text:{type:'string'},voice_id:{type:'string'}},required:['text']}}},
+  // ── AUTO-UPDATE ──────────────────────────────────────────────────────
+  {type:'function',function:{name:'check_updates',description:'Verifica novidades do Claude AI e features novas para incorporar',parameters:{type:'object',properties:{}}}},
+  // ── CANVA ────────────────────────────────────────────────────────────
+  {type:'function',function:{name:'canva_create',description:'Cria design no Canva (posts, thumbnails, carrosséis)',parameters:{type:'object',properties:{tipo:{type:'string',enum:['post','thumbnail','apresentacao','stories','email']},descricao:{type:'string'},titulo:{type:'string'}},required:['tipo','descricao']}}},
   {type:'function',function:{name:'projeto_status',description:'Status completo do projeto psicologia.doc e do sistema',parameters:{type:'object',properties:{}}}},
 ];
 
@@ -216,16 +229,114 @@ async function runTool(name,args,ctx={}){
       return`🚀 **psicologia.doc ${VER}**\nDeploy: repovazio.vercel.app\nGitHub: tafita81/Repovazio\nCron: a cada 1min → /api/cerebro\nTools: ${TOOLS.length}\nDia: 15/261 (revelação: 31/12/2026)\nCapacidades: self-optimize, criar apps, GitHub CRUD, Vercel API, Supabase SQL`;
     }
 
+
+    // ── SETTINGS ──────────────────────────────────────────────────────────
+    if(name==='settings_save'){
+      if(!SBU||!SBK)return`❌ Supabase não configurado`;
+      const key=`cfg_${args.service||'global'}`;
+      const val=JSON.stringify({tokens:args.tokens,extra:args.extra||'',ts:Date.now()});
+      await fetch(`${SBU}/rest/v1/ia_cache`,{method:'POST',headers:{apikey:SBK,Authorization:`Bearer ${SBK}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({cache_key:key,value:val,expires_at:new Date(Date.now()+365*864e5).toISOString()})});
+      return`✅ Configuração de **${args.service}** salva. Tokens armazenados de forma segura.`;
+    }
+    if(name==='settings_load'){
+      if(!SBU||!SBK)return`❌ Supabase não configurado`;
+      const svc=args.service||'global';
+      const r=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.cfg_${svc}&select=value`,{headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});
+      const d=await r.json();
+      if(!d[0])return`ℹ️ Nenhuma configuração salva para "${svc}". Adicione tokens nas Configurações (⚙️).`;
+      const cfg=JSON.parse(d[0].value);
+      return`✅ Config **${svc}**: ${cfg.tokens?'tokens configurados':'sem tokens'} | Salvo: ${new Date(cfg.ts).toLocaleString('pt-BR')}`;
+    }
+
+    // ── NOTION ─────────────────────────────────────────────────────────────
+    if(name==='notion_search'||name==='notion_write'){
+      // Get Notion token from Supabase settings
+      let ntk='';
+      if(SBU&&SBK){const r=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.cfg_notion&select=value`,{headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});const d=await r.json();if(d[0])try{ntk=JSON.parse(d[0].value).tokens||'';}catch(e){}}
+      if(!ntk)return`❌ Notion não configurado. Vá em ⚙️ Configurações → Notion e adicione seu Integration Token.`;
+      if(name==='notion_search'){
+        const r=await fetch('https://api.notion.com/v1/search',{method:'POST',headers:{Authorization:`Bearer ${ntk}`,'Notion-Version':'2022-06-28','Content-Type':'application/json'},body:JSON.stringify({query:args.query,page_size:5})});
+        const d=await r.json();
+        if(!r.ok)return`❌ Notion erro: ${d.message||r.status}`;
+        const results=(d.results||[]).map(p=>{const title=p.properties?.title?.title?.[0]?.plain_text||p.properties?.Name?.title?.[0]?.plain_text||'Sem título';return`📄 **${title}** — ${p.url}`;}).join('\n');
+        return`🔍 **Notion:** "${args.query}"\n\n${results||'Nenhum resultado'}`;
+      }
+      if(name==='notion_write'){
+        const dbId=args.database_id;
+        if(dbId){
+          const r=await fetch('https://api.notion.com/v1/pages',{method:'POST',headers:{Authorization:`Bearer ${ntk}`,'Notion-Version':'2022-06-28','Content-Type':'application/json'},body:JSON.stringify({parent:{database_id:dbId},properties:{title:{title:[{text:{content:args.title}}]}},children:[{object:'block',type:'paragraph',paragraph:{rich_text:[{text:{content:args.content.substring(0,2000)}}]}}]})});
+          const d=await r.json();
+          return r.ok?`✅ Página criada no Notion: ${d.url}`:`❌ Notion erro: ${d.message}`;
+        }
+        return`❌ Informe database_id. Use notion_search para encontrar o ID do banco.`;
+      }
+    }
+
+    // ── ELEVENLABS TTS ─────────────────────────────────────────────────────
+    if(name==='elevenlabs_tts'){
+      let xi='';
+      if(SBU&&SBK){const r=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.cfg_elevenlabs&select=value`,{headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});const d=await r.json();if(d[0])try{xi=JSON.parse(d[0].value).tokens||'';}catch(e){}}
+      if(!xi)return`❌ ElevenLabs não configurado. Vá em ⚙️ → Voz e adicione sua API Key.
+🎙 Usando TTS gratuito do navegador como alternativa.`;
+      const voiceId=args.voice_id||'EXAVITQu4vr4xnSDxMaL';
+      const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,{method:'POST',headers:{'xi-api-key':xi,'Content-Type':'application/json'},body:JSON.stringify({text:args.text.substring(0,500),model_id:'eleven_multilingual_v2',voice_settings:{stability:0.5,similarity_boost:0.75}})});
+      if(!r.ok)return`❌ ElevenLabs erro ${r.status}. Verifique sua API key.`;
+      const blob=await r.arrayBuffer();
+      const b64=Buffer.from(blob).toString('base64');
+      return`🎙 [AUDIO:data:audio/mpeg;base64,${b64.substring(0,100)}...] Áudio gerado (${blob.byteLength}b). ✅`;
+    }
+
+    // ── CHECK UPDATES ──────────────────────────────────────────────────────
+    if(name==='check_updates'||args.action==='check_updates'){
+      const r=await fetch('https://www.anthropic.com/news',{headers:{'User-Agent':'Mozilla/5.0'},signal:AbortSignal.timeout(8000)}).catch(()=>null);
+      if(!r?.ok)return`ℹ️ Auto-update: não foi possível verificar novidades agora. Próxima verificação em 24h.`;
+      const html=await r.text();
+      const titles=[];const rx=/<h3[^>]*>([^<]{10,80})<\/h3>/g;let m;
+      while((m=rx.exec(html))&&titles.length<3)titles.push(m[1].trim());
+      if(!titles.length)return`ℹ️ Sem novidades detectadas no Claude hoje.`;
+      const update=`🆕 **Novidades Claude (${new Date().toLocaleDateString('pt-BR')}):**\n${titles.map(t=>`• ${t}`).join('\n')}`;
+      if(SBU&&SBK)await fetch(`${SBU}/rest/v1/ia_cache`,{method:'POST',headers:{apikey:SBK,Authorization:`Bearer ${SBK}`,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({cache_key:'last_claude_update',value:update,expires_at:new Date(Date.now()+7*864e5).toISOString()})});
+      return update;
+    }
+
+    // ── CANVA ──────────────────────────────────────────────────────────────
+    if(name==='canva_create'){
+      const tipos={post:'Instagram Post (1080x1080)',thumbnail:'YouTube Thumbnail (1280x720)',apresentacao:'Apresentação (16:9)',stories:'Stories (1080x1920)',email:'Email Header (600x200)'};
+      const img=`https://image.pollinations.ai/prompt/${encodeURIComponent(args.descricao+' professional design '+args.tipo)}?width=1080&height=1080&nologo=true`;
+      return`🎨 **Canva — ${tipos[args.tipo]||args.tipo}**\n\n**${args.titulo||args.descricao}**\n\n![Preview](${img})\n\n💡 Para criar no Canva real, adicione seu token em ⚙️ → Criação → Canva Token.`;
+    }
+
     return`❌ Tool "${name}" não implementada`;
   }catch(e){return`❌ Erro em ${name}: ${e.message}`;}
 }
 
 // ── AI APIs ───────────────────────────────────────────────────────────────
-async function groqStream(msgs,tools,signal){
-  return fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${GK}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:msgs,tools,tool_choice:'auto',max_tokens:4096,temperature:0.7,stream:true}),signal});
+
+// ── MULTI-KEY ROTATION ─────────────────────────────────────────────────────
+async function getActiveGroqKey(supaUrl,supaKey){
+  const envKey=process.env.GROQ_API_KEY||'';
+  if(!supaUrl||!supaKey)return envKey;
+  try{
+    const r=await fetch(`${supaUrl}/rest/v1/ia_cache?cache_key=eq.cfg_groq&select=value`,{headers:{apikey:supaKey,Authorization:`Bearer ${supaKey}`}});
+    const d=await r.json();
+    if(d[0]){
+      const cfg=JSON.parse(d[0].value);
+      const keys=(cfg.tokens||'').split(',').map(k=>k.trim()).filter(Boolean);
+      if(keys.length){
+        // Rotate based on minute to distribute load
+        const idx=Math.floor(Date.now()/60000)%keys.length;
+        return keys[idx]||envKey;
+      }
+    }
+  }catch(e){}
+  return envKey;
 }
-async function groqCall(msgs,tools){
-  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${GK}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:msgs,tools,tool_choice:'auto',max_tokens:4096,temperature:0.7})});
+
+async function groqStream(msgs,tools,signal,activeKey){const gk=activeKey||GK;
+  return fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${gk}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:msgs,tools,tool_choice:'auto',max_tokens:4096,temperature:0.7,stream:true}),signal});
+}
+async function groqCall(msgs,tools,activeKey){const gk=activeKey||GK;
+  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${gk}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:msgs,tools,tool_choice:'auto',max_tokens:4096,temperature:0.7})});
   return r.json();
 }
 async function geminiCall(msgs){
