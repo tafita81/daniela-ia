@@ -30,14 +30,23 @@ async function togetherCall(msgs){
 
 // ── PROVIDER CHAIN com reset times ──────────────────────────────────────
 // resetType: 'daily_utc' = reseta meia-noite UTC, 'daily_pt' = meia-noite PT (8h UTC), 'monthly' = 1º do mês, 'credits' = por crédito
+// ── CADEIA OTIMIZADA POR QUALIDADE + COBERTURA ────────────────────────────
+// Estratégia: melhor modelo primeiro, depois fallbacks com reset independente
+// Groq 3.3 e 3.1 compartilham o MESMO limite diário (mesmo GK)
+// Por isso Gemini/Together/Cohere entram antes de usar Groq 3.1
 const MODEL_CHAIN=[
-  {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc'},
-  {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc'},
-  {name:'gemini-2.0-flash',provider:'gemini',limit:1500,key:()=>GEK,resetType:'daily_pt'},
-  {name:'command-r-08-2024',provider:'cohere',limit:5000000,key:()=>CHK,resetType:'monthly'},
-  {name:'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',provider:'together',limit:1000000,key:()=>TGK,resetType:'credits'},
+  // 🦙 #1 — MELHOR QUALIDADE: Groq Llama 3.3 70B (100k tokens/dia)
+  {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc',emoji:'🦙',label:'Llama 3.3 70B'},
+  // ✨ #2 — FALLBACK RÁPIDO: Gemini 2.0 Flash (reset independente, 8h depois do Groq)
+  {name:'gemini-2.0-flash',provider:'gemini',limit:50000,key:()=>GEK,resetType:'daily_pt',emoji:'✨',label:'Gemini 2.0'},
+  // 🔷 #3 — FALLBACK SEPARADO: Together AI (provider completamente diferente)
+  {name:'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',provider:'together',limit:1000000,key:()=>TGK,resetType:'credits',emoji:'🔷',label:'Together Turbo'},
+  // 🟡 #4 — RESERVA ENORME: Cohere (5M tokens/mês ≈ 167k/dia efetivos!)
+  {name:'command-r-08-2024',provider:'cohere',limit:5000000,key:()=>CHK,resetType:'monthly',emoji:'🟡',label:'Cohere Command-R'},
+  // 🦙 #5 — RASPAGEM FINAL: Groq 3.1 (tokens restantes do mesmo pool Groq)
+  {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK,resetType:'daily_utc',emoji:'🦙',label:'Llama 3.1 8B'},
 ];
-const SWITCH_THRESHOLD=0.85; // switch proativo a 85%
+const SWITCH_THRESHOLD=0.88; // switch a 88% (conservador para não desperdiçar)
 
 // Calcula tempo de reset para cada provider em ms
 function getResetTimeMs(resetType){
@@ -128,7 +137,7 @@ async function updateTokenUsage(tokensEstimate){
     state.used=0;
     state.last_reset=Date.now();
     state.switched_at=new Date().toISOString();
-    state.switch_event=`⚡ ${curr.name.split('/').pop()} → ${next.name.split('/').pop()} | Reset ${curr.provider} em ${formatTimeLeft(resetMsAtSwitch)}`;
+    state.switch_event=`⚡ ${curr.label||curr.name.split('/').pop()} → ${next.label||next.name.split('/').pop()} | Reset ${curr.provider} em ${formatTimeLeft(resetMsAtSwitch)}`;
     
     // Guardar reset times de todos os providers
     state.provider_resets=providerResets.map(p=>({
@@ -617,10 +626,12 @@ export async function GET(){
   
   // Calcular reset times em tempo real para todos os providers
   const providerStatus=MODEL_CHAIN.map((mm,i)=>({
-    name:mm.name.split('/').pop().replace('-versatile','').replace('-instant',''),
+    name:mm.label||mm.name.split('/').pop(),
     full_name:mm.name,
     provider:mm.provider,
+    emoji:mm.emoji||'🤖',
     active:i===idx,
+    position:i+1,
     reset_in:formatTimeLeft(getResetTimeMs(mm.resetType||'daily_utc')),
     reset_ms:getResetTimeMs(mm.resetType||'daily_utc'),
     reset_type:mm.resetType||'daily_utc',
@@ -650,10 +661,13 @@ export async function GET(){
     provider_status:providerStatus,
     chain:MODEL_CHAIN.map((mm,i)=>({
       name:mm.name.split('/').pop(),
+      label:mm.label||mm.name.split('/').pop(),
+      emoji:mm.emoji||'🤖',
       provider:mm.provider,
       limit:mm.limit,
       active:i===idx,
       reset_in:formatTimeLeft(getResetTimeMs(mm.resetType||'daily_utc')),
+      position:i+1,
     })),
     updated_at:state.updated_at||null,
   });
