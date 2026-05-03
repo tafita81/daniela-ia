@@ -554,7 +554,7 @@ async function geminiCall(msgs){
 
 
 // Cohere free API fallback (5M tokens/month free)
-const CHK=process.env.COHERE_API_KEY||'';
+const CHK=process.env.COHERE_API_KEY||'cohere_KJFdijk5qzPXeIb1asnrMo7iaKtVui337fjIgEYQ2vMfd5';
 async function cohereCall(msgs){
   if(!CHK)return null;
   try{
@@ -616,8 +616,26 @@ Repositório principal: tafita81/Repovazio (branch main)
 Frontend: app/chat/page.jsx | Backend: app/api/chat/route.js`;
 
 
-// Handle GET for token status dashboard
+// Handle GET for token status dashboard + real-time connection health check
 export async function GET(){
+  // Testar conexões reais (rápido, max 3s cada)
+  const testConnections=async()=>{
+    const results={};
+    // Groq
+    try{const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:`Bearer ${GK}`},signal:AbortSignal.timeout(3000)});results.groq=r.ok;}catch(e){results.groq=false;}
+    // Cohere  
+    try{const r=await fetch('https://api.cohere.com/v2/models',{headers:{Authorization:`Bearer ${CHK}`},signal:AbortSignal.timeout(3000)});results.cohere=r.ok;}catch(e){results.cohere=false;}
+    // Gemini
+    try{const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEK}&pageSize=1`,{signal:AbortSignal.timeout(3000)});results.gemini=r.ok;}catch(e){results.gemini=false;}
+    // GitHub
+    try{const r=await fetch('https://api.github.com/user',{headers:{Authorization:`token ${process.env.GH_PAT||''}`},signal:AbortSignal.timeout(3000)});const d=await r.json();results.github=r.ok;results.github_user=d.login||null;}catch(e){results.github=false;}
+    // Supabase
+    try{const r=await fetch(`${SBU}/rest/v1/ia_cache?limit=1`,{headers:{apikey:SBK,Authorization:`Bearer ${SBK}`},signal:AbortSignal.timeout(3000)});results.supabase=r.ok;}catch(e){results.supabase=false;}
+    // Together
+    try{const r=await fetch('https://api.together.xyz/v1/models',{headers:{Authorization:`Bearer ${TGK}`},signal:AbortSignal.timeout(3000)});results.together=r.ok;}catch(e){results.together=false;}
+    return results;
+  };
+  const connections=await testConnections();
   const state=await getTokenState();
   const idx=state.chain_idx||0;
   const m=MODEL_CHAIN[idx];
@@ -670,7 +688,8 @@ export async function GET(){
       position:i+1,
     })),
     updated_at:state.updated_at||null,
-    health:{groq:!!GK,gemini:!!GEK,cohere:!!CHK,together:!!TGK},
+    health:{groq:!!GK,gemini:!!GEK,cohere:!!CHK,together:!!TGK,github:!!process.env.GH_PAT,supabase:!!SBU},
+    connections,
   });
 }
 
