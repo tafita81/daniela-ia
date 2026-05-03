@@ -15,8 +15,8 @@ const REPO='tafita81/Repovazio',VER='V15-ULTRA-2026-05-03';
 const MODEL_CHAIN=[
   {name:'llama-3.3-70b-versatile',provider:'groq',limit:100000,key:()=>GK},
   {name:'llama-3.1-8b-instant',provider:'groq',limit:100000,key:()=>GK},
-  {name:'gemini-1.5-flash',provider:'gemini',limit:999999,key:()=>GEK},
-  {name:'gemini-1.5-pro',provider:'gemini',limit:50000,key:()=>GEK},
+  {name:'gemini-2.0-flash',provider:'gemini',limit:999999,key:()=>GEK},
+  {name:'gemini-2.0-flash',provider:'gemini',limit:50000,key:()=>GEK},
 ];
 const SWITCH_THRESHOLD=0.88; // switch at 88% of limit
 
@@ -182,7 +182,7 @@ async function runTool(name,args,ctx={}){
       return`🎨 ![${args.descricao}](${url})`;
     }
     if(name==='analisar_imagem'&&GEK){
-      const r=await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEK}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:args.url.replace(/^data:image\/\w+;base64,/,'')}},{text:args.pergunta||'Descreva'}]}]})});
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEK}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:args.url.replace(/^data:image\/\w+;base64,/,'')}},{text:args.pergunta||'Descreva'}]}]})});
       const d=await r.json();return`👁️ ${d.candidates?.[0]?.content?.parts?.[0]?.text||'Erro'}`;
     }
 
@@ -435,7 +435,7 @@ async function geminiCall(msgs){
     const systemMsg=msgs.find(m=>m.role==='system');
     const body={contents,generationConfig:{maxOutputTokens:4096,temperature:0.7}};
     if(systemMsg)body.systemInstruction={parts:[{text:systemMsg.content}]};
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEK}`,
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEK}`,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
     const d=await r.json();
     if(!r.ok)return`❌ Gemini erro ${r.status}: ${d.error?.message||JSON.stringify(d).substring(0,100)}`;
@@ -466,7 +466,7 @@ async function geminiProCall(msgs){
     const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
     if(!cleanMsgs.length)return null;
     const contents=cleanMsgs.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:String(m.content||'...')}]}));
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEK}`,
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEK}`,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{maxOutputTokens:2048}}),signal:AbortSignal.timeout(30000)});
     const d=await r.json();
     if(!r.ok)return null;
