@@ -423,7 +423,16 @@ async function groqCall(msgs,tools,activeKey){const gk=activeKey||GK;
   return r.json();
 }
 async function geminiCall(msgs){
-  if(!GEK)return'❌ Gemini não configurado. Verifique GEMINI_API_KEY.';
+  // Try env key first, then Supabase stored key
+  let gemKey=GEK;
+  if(!gemKey&&SBU&&SBK){
+    try{
+      const kg=await fetch(`${SBU}/rest/v1/ia_cache?cache_key=eq.gemini_key_1&select=value`,{headers:{apikey:SBK,Authorization:`Bearer ${SBK}`}});
+      const kd=await kg.json();
+      if(kd[0]?.value)gemKey=kd[0].value;
+    }catch(e){}
+  }
+  if(!gemKey)return'❌ Gemini não configurado. Verifique GEMINI_API_KEY.';
   try{
     // Clean messages for Gemini (remove tool_calls, tool roles, system)
     const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
@@ -435,7 +444,7 @@ async function geminiCall(msgs){
     const systemMsg=msgs.find(m=>m.role==='system');
     const body={contents,generationConfig:{maxOutputTokens:4096,temperature:0.7}};
     if(systemMsg)body.systemInstruction={parts:[{text:systemMsg.content}]};
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEK}`,
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gemKey}`,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
     const d=await r.json();
     if(!r.ok)return`❌ Gemini erro ${r.status}: ${d.error?.message||JSON.stringify(d).substring(0,100)}`;
@@ -466,7 +475,7 @@ async function geminiProCall(msgs){
     const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
     if(!cleanMsgs.length)return null;
     const contents=cleanMsgs.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:String(m.content||'...')}]}));
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEK}`,
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gemKey}`,
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{maxOutputTokens:2048}}),signal:AbortSignal.timeout(30000)});
     const d=await r.json();
     if(!r.ok)return null;
