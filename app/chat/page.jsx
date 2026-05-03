@@ -19,10 +19,20 @@ function TokenMonitor(){
     go();const t=setInterval(go,10000);return()=>clearInterval(t);
   },[]);
   if(!st)return null;
-  const{current:c={},chain=[],switch_event:se}=st;
+  const c=st.current||{};const chain=st.chain||[];const se=st.switch_event;
   const pct=Math.min(c.pct||0,100);
   const col=pct<60?'#4ade80':pct<88?'#facc15':'#f87171';
   const act=chain.find(x=>x.active)||{};
+  const row=(p,i)=>(
+    <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 6px',marginBottom:1,borderRadius:3,background:p.active?'rgba(124,58,237,0.08)':'transparent',border:p.active?'1px solid rgba(124,58,237,0.2)':'1px solid transparent'}}>
+      <span style={{width:14,textAlign:'center',opacity:p.active?1:0.4}}>{p.emoji||'🤖'}</span>
+      <span style={{fontSize:9,color:'#374151',width:12}}>#{i+1}</span>
+      <span style={{flex:1,fontSize:10,color:p.active?'#e5e7eb':'#4b5563',fontWeight:p.active?700:400}}>{(p.label||p.name||'').substring(0,20)}</span>
+      {p.active&&<span style={{fontSize:8,color:'#4ade80'}}>●ATIVO</span>}
+      <span style={{fontSize:9,color:'#1f2937'}}>{p.limit>=1e6?`${(p.limit/1e6).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`}</span>
+      <span style={{fontSize:9,color:p.active?'#facc15':'#1f2937'}}>{p.reset_in||'—'}</span>
+    </div>
+  );
   return(
     <div style={{borderBottom:'1px solid #111',background:'#030303'}}>
       <div onClick={()=>setExp(e=>!e)} style={{padding:'4px 10px',display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer',userSelect:'none'}}>
@@ -31,31 +41,20 @@ function TokenMonitor(){
         <div style={{width:80,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden'}}>
           <div style={{width:`${pct}%`,height:'100%',background:col,transition:'width 0.5s'}}/>
         </div>
-        <span style={{color:'#4b5563',fontSize:10}}>{pct}%</span>
-        <span style={{color:'#374151',fontSize:10}}>⏱{c.reset_in||'—'}</span>
-        {se&&<span style={{color:'#7c3aed',fontSize:9,maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>⚡{se.substring(0,45)}</span>}
+        <span style={{color:'#4b5563',fontSize:10}}>{pct}% · {c.reset_in||'—'}</span>
+        {se&&<span style={{color:'#7c3aed',fontSize:9,overflow:'hidden',maxWidth:100,whiteSpace:'nowrap',textOverflow:'ellipsis'}}>⚡{se.substring(0,40)}</span>}
         <span style={{color:'#1f2937',fontSize:9,marginLeft:'auto'}}>{exp?'▲':'▼'}</span>
       </div>
       {exp&&(
         <div style={{borderTop:'1px solid #0d0d0d',padding:'6px 10px'}}>
-          <div style={{fontSize:9,color:'#374151',marginBottom:4}}>CADEIA · switch 88% · ♾️ infinito</div>
-          <div>
-            {chain.map((p,i)=>(
-              <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 6px',marginBottom:1,borderRadius:3,background:p.active?'rgba(124,58,237,0.08)':'transparent',border:p.active?'1px solid rgba(124,58,237,0.2)':'1px solid transparent'}}>
-                <span style={{fontSize:11,opacity:p.active?1:0.4,width:14}}>{p.emoji||'🤖'}</span>
-                <span style={{fontSize:9,color:'#374151',width:12}}>#{i+1}</span>
-                <span style={{flex:1,fontSize:10,color:p.active?'#e5e7eb':'#4b5563',fontWeight:p.active?700:400}}>{(p.label||p.name||'').substring(0,20)}</span>
-                {p.active&&<span style={{fontSize:8,color:'#4ade80'}}>●ATIVO</span>}
-                <span style={{fontSize:9,color:'#1f2937'}}>{p.limit>=1e6?`${(p.limit/1e6).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`}</span>
-                <span style={{fontSize:9,color:p.active?'#facc15':'#1f2937'}}>{p.reset_in||'—'}</span>
-              </div>
-            ))}
-          </div>
+          <div style={{fontSize:9,color:'#374151',marginBottom:4}}>CADEIA · switch 88% · ♾️</div>
+          {chain.map(row)}
         </div>
       )}
     </div>
   );
 }
+
 function SettingsModal({onClose}){
   const[tab,setTab]=useState('ia');
   const[cfg,setCfg]=useState(()=>{try{return JSON.parse(localStorage.getItem('d_cfg')||'{}')}catch{return{}}});
