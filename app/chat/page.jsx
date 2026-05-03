@@ -13,111 +13,49 @@ const STORAGE={
 // ── TOKEN MONITOR V2 ─────────────────────────────────────────────────────
 function TokenMonitor(){
   const[st,setSt]=useState(null);
-  const[expanded,setExpanded]=useState(false);
-  const[tick,setTick]=useState(0);
+  const[exp,setExp]=useState(false);
   useEffect(()=>{
-    const load=async()=>{try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}};
-    load();const poll=setInterval(load,10000);const timer=setInterval(()=>setTick(t=>t+1),1000);
-    return()=>{clearInterval(poll);clearInterval(timer);};
+    const go=async()=>{try{const r=await fetch('/api/chat');setSt(await r.json());}catch(e){}};
+    go();const t=setInterval(go,10000);return()=>clearInterval(t);
   },[]);
   if(!st)return null;
-  const{current,chain=[],switch_event}=st;
-  const pct=Math.min(current?.pct||0,100);
-  const color=pct<60?'#4ade80':pct<88?'#facc15':'#f87171';
-  const activeLink=chain.find(c=>c.active)||{};
+  const{current:c={},chain=[],switch_event:se}=st;
+  const pct=Math.min(c.pct||0,100);
+  const col=pct<60?'#4ade80':pct<88?'#facc15':'#f87171';
+  const act=chain.find(x=>x.active)||{};
   return(
     <div style={{borderBottom:'1px solid #111',background:'#030303'}}>
-      <div onClick={()=>setExpanded(e=>!e)} style={{padding:'4px 10px',display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer',userSelect:'none'}}>
-        <span style={{fontSize:13}}>{activeLink.emoji||'🤖'}</span>
-        <span style={{color,fontWeight:700}}>{(activeLink.label||current?.model||'').substring(0,16)}</span>
-        <div style={{flex:1,maxWidth:90,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden'}}>
-          <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 0.5s'}}/>
+      <div onClick={()=>setExp(e=>!e)} style={{padding:'4px 10px',display:'flex',alignItems:'center',gap:6,fontSize:11,cursor:'pointer',userSelect:'none'}}>
+        <span>{act.emoji||'🤖'}</span>
+        <span style={{color:col,fontWeight:700}}>{(act.label||c.model||'').substring(0,16)}</span>
+        <div style={{width:80,height:3,background:'#1a1a1a',borderRadius:2,overflow:'hidden'}}>
+          <div style={{width:`${pct}%`,height:'100%',background:col,transition:'width 0.5s'}}/>
         </div>
         <span style={{color:'#4b5563',fontSize:10}}>{pct}%</span>
-        <span style={{color:'#374151',fontSize:10}}>⏱{current?.reset_in||'—'}</span>
-        {switch_event&&<span style={{color:'#7c3aed',fontSize:9,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>⚡{switch_event.substring(0,40)}</span>}
-        <span style={{color:'#1f2937',fontSize:9,marginLeft:'auto'}}>{expanded?'▲':'▼'}</span>
+        <span style={{color:'#374151',fontSize:10}}>⏱{c.reset_in||'—'}</span>
+        {se&&<span style={{color:'#7c3aed',fontSize:9,maxWidth:110,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>⚡{se.substring(0,45)}</span>}
+        <span style={{color:'#1f2937',fontSize:9,marginLeft:'auto'}}>{exp?'▲':'▼'}</span>
       </div>
-      {expanded&&(
+      {exp&&(
         <div style={{borderTop:'1px solid #0d0d0d',padding:'6px 10px'}}>
-          <div style={{fontSize:9,color:'#374151',marginBottom:4}}>CADEIA · switch 88% · loop ♾️</div>
-          {chain.map((p,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 6px',borderRadius:3,marginBottom:1,background:p.active?'rgba(124,58,237,0.08)':'transparent',border:p.active?'1px solid rgba(124,58,237,0.2)':'1px solid transparent'}}>
-              <span style={{fontSize:11,width:14,textAlign:'center',opacity:p.active?1:0.4}}>{p.emoji||'🤖'}</span>
-              <span style={{fontSize:9,color:'#374151',width:12}}>#{p.position||i+1}</span>
-              <span style={{flex:1,fontSize:10,color:p.active?'#e5e7eb':'#4b5563',fontWeight:p.active?700:400}}>{(p.label||p.name||'').substring(0,20)}</span>
-              {p.active&&<span style={{fontSize:8,color:'#4ade80',fontWeight:700}}>●ATIVO</span>}
-              <span style={{fontSize:9,color:'#1f2937'}}>{p.limit>=1000000?`${(p.limit/1000000).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`}</span>
-              <span style={{fontSize:9,color:p.active?'#facc15':'#1f2937'}}>{p.reset_in||'—'}</span>
-            </div>
-          ))}
+          <div style={{fontSize:9,color:'#374151',marginBottom:4}}>CADEIA · switch 88% · ♾️ infinito</div>
+          <div>
+            {chain.map((p,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 6px',marginBottom:1,borderRadius:3,background:p.active?'rgba(124,58,237,0.08)':'transparent',border:p.active?'1px solid rgba(124,58,237,0.2)':'1px solid transparent'}}>
+                <span style={{fontSize:11,opacity:p.active?1:0.4,width:14}}>{p.emoji||'🤖'}</span>
+                <span style={{fontSize:9,color:'#374151',width:12}}>#{i+1}</span>
+                <span style={{flex:1,fontSize:10,color:p.active?'#e5e7eb':'#4b5563',fontWeight:p.active?700:400}}>{(p.label||p.name||'').substring(0,20)}</span>
+                {p.active&&<span style={{fontSize:8,color:'#4ade80'}}>●ATIVO</span>}
+                <span style={{fontSize:9,color:'#1f2937'}}>{p.limit>=1e6?`${(p.limit/1e6).toFixed(0)}M`:`${(p.limit/1000).toFixed(0)}k`}</span>
+                <span style={{fontSize:9,color:p.active?'#facc15':'#1f2937'}}>{p.reset_in||'—'}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
-
-function TokenMonitor(){
-  const[st,setSt]=useState(null);
-  const[tick,setTick]=useState(0);
-  const[expanded,setExpanded]=useState(false);
-
-  useEffect(()=>{
-    const load=async()=>{try{const r=await fetch('/api/chat');const d=await r.json();setSt(d);}catch(e){}};
-    load();
-    const poll=setInterval(load,10000); // API poll a cada 10s
-    const timer=setInterval(()=>setTick(t=>t+1),1000); // countdown a cada 1s
-    return()=>{clearInterval(poll);clearInterval(timer);};
-  },[]);
-
-  if(!st)return null;
-  const{current,next,switch_event,provider_status=[]}=st;
-  const pct=Math.min(current?.pct||0,100);
-  const color=pct<60?'#4ade80':pct<85?'#facc15':'#f87171';
-
-  const provIcon=(p)=>p==='groq'?'🦙':p==='gemini'?'✨':p==='cohere'?'🟡':p==='together'?'🔷':'🤖';
-  const shortName=(n='')=>n.replace('llama-3.3-70b-versatile','Llama 3.3').replace('llama-3.1-8b-instant','Llama 3.1').replace('gemini-2.0-flash','Gemini 2.0').replace('command-r-08-2024','Command-R').replace('Meta-Llama-3.1-8B-Instruct-Turbo','Llama 3.1 T').substring(0,14);
-
-  return(
-    <div style={{borderBottom:'1px solid #1a1a1a',background:'#050505'}}>
-      {/* Barra principal */}
-      <div onClick={()=>setExpanded(e=>!e)} style={{padding:'5px 12px',display:'flex',alignItems:'center',gap:8,fontSize:11,cursor:'pointer',userSelect:'none'}}>
-        <span style={{color:'#6b7280',fontSize:10}}>IA:</span>
-        <span style={{color:color,fontWeight:700,fontSize:12}}>{provIcon(current?.provider)} {shortName(current?.model)}</span>
-        <div style={{flex:1,maxWidth:120,height:3,background:'#222',borderRadius:2,overflow:'hidden'}}>
-          <div style={{width:`${pct}%`,height:'100%',background:color,transition:'width 0.5s',borderRadius:2}}/>
-        </div>
-        <span style={{color:'#6b7280',fontSize:10}}>{pct}%</span>
-        <span style={{color:'#374151',fontSize:10}}>•</span>
-        <span style={{color:'#4b5563',fontSize:10}}>{current?.reset_in||'—'}</span>
-        {switch_event&&<span style={{color:'#a78bfa',fontSize:9,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>⚡{switch_event}</span>}
-        <span style={{color:'#374151',fontSize:9,marginLeft:'auto'}}>{expanded?'▲':'▼'}</span>
-      </div>
-      {/* Painel expandido */}
-      {expanded&&(
-        <div style={{padding:'8px 12px',borderTop:'1px solid #111',display:'grid',gap:4}}>
-          <div style={{fontSize:10,color:'#6b7280',marginBottom:4}}>📊 Status de todas as IAs (switch automático a 85%)</div>
-          {provider_status.map((p,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 6px',borderRadius:4,background:p.active?'rgba(139,92,246,0.1)':'transparent',border:p.active?'1px solid rgba(139,92,246,0.2)':'1px solid transparent'}}>
-              <span style={{fontSize:12}}>{provIcon(p.provider)}</span>
-              <span style={{color:p.active?'#a78bfa':'#6b7280',fontSize:11,flex:1,fontWeight:p.active?600:400}}>{p.name||p.provider}</span>
-              {p.active&&<span style={{fontSize:9,color:'#4ade80',fontWeight:700}}>● ATIVO</span>}
-              <span style={{fontSize:10,color:'#374151'}}>reset: <span style={{color:p.active?'#facc15':'#4b5563'}}>{p.reset_in||'—'}</span></span>
-              <span style={{fontSize:10,color:'#1f2937'}}>{(p.limit/1000).toFixed(0)}k</span>
-            </div>
-          ))}
-          {next&&(
-            <div style={{marginTop:4,fontSize:10,color:'#4b5563'}}>
-              ⏭️ Próximo: {provIcon(next.provider)} {shortName(next.model)} • reset em {next.reset_in||'—'}
-            </div>
-          )}
-          <div style={{marginTop:4,fontSize:9,color:'#1f2937'}}>♾️ Loop infinito ativo — nunca para</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SettingsModal({onClose}){
   const[tab,setTab]=useState('ia');
   const[cfg,setCfg]=useState(()=>{try{return JSON.parse(localStorage.getItem('d_cfg')||'{}')}catch{return{}}});
