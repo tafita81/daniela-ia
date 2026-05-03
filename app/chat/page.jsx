@@ -351,6 +351,7 @@ export default function Chat(){
 
   async function handleFile(e){
     const f=e.target.files[0];if(!f)return;
+    if(f.name.toLowerCase().endsWith('.zip')){setFile({name:f.name,type:'application/zip',data:null,preview:null,isZip:true,size:f.size});return;}
     const reader=new FileReader();
     reader.onload=ev=>setFile({name:f.name,type:f.type,data:ev.target.result,preview:f.type.startsWith('image/')?ev.target.result:null});
     reader.readAsDataURL(f);
@@ -520,7 +521,7 @@ export default function Chat(){
           {file&&(<div className="fp">{file.preview?<img src={file.preview} className="fp-img" alt="preview"/>:<span>📎 {file.name}</span>}<button onClick={()=>setFile(null)}>✕</button></div>)}
           <div className="ic">
             <button className="ub2" onClick={()=>fileRef.current?.click()} title="Anexar">📎</button>
-            <input ref={fileRef} type="file" accept="image/*,application/pdf,.txt,.js,.py,.ts,.jsx,.tsx,.json,.csv" onChange={handleFile} style={{display:'none'}}/>
+            <input ref={fileRef} type="file" accept="image/*,application/pdf,.txt,.js,.py,.ts,.jsx,.tsx,.json,.csv,.zip,.md,.html,.xml,.yaml,.yml,.env,.sh" onChange={handleFile} style={{display:'none'}}/>
             <textarea ref={taRef} className="it" placeholder={`Mensagem para Daniela...${useQwen?' [Qwen 3]':''}`} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey} rows={1}/>
             {loading?<button className="sb stop" onClick={stop}>⏹️</button>:<button className={`sb${input.trim()||file?' active':''}`} onClick={send} disabled={!input.trim()&&!file}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>}
           </div>
