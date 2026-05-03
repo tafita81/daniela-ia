@@ -131,7 +131,7 @@ export default function Chat(){
           ))}
         </div>
         <div className="sb-bot">
-          <div className="ver">'V15-ULTRA'</div>
+          <div className="ver">{VER||'V14'}</div>
           <div className="ui"><div className="ua">D</div><div className="un">Daniela Coelho</div></div>
         </div>
       </aside>
