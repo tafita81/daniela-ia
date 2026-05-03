@@ -443,6 +443,37 @@ async function geminiCall(msgs){
   }catch(e){return`❌ Gemini erro: ${e.message}`;}
 }
 
+
+// Cohere free API fallback (api.cohere.com - requires free key)
+const CHK=process.env.COHERE_API_KEY||'';
+async function cohereCall(msgs){
+  if(!CHK)return null;
+  try{
+    const prompt=msgs.filter(m=>m.role!=='system').map(m=>`${m.role==='assistant'?'Chatbot':'User'}: ${m.content||''}`).join('\n')+'\nChatbot:';
+    const r=await fetch('https://api.cohere.com/v1/generate',{method:'POST',
+      headers:{Authorization:`Bearer ${CHK}`,'Content-Type':'application/json'},
+      body:JSON.stringify({model:'command',prompt,max_tokens:1000,temperature:0.7}),
+      signal:AbortSignal.timeout(20000)});
+    const d=await r.json();
+    return d.generations?.[0]?.text||null;
+  }catch(e){return null;}
+}
+
+// Gemini Pro as extra fallback
+async function geminiProCall(msgs){
+  if(!GEK)return null;
+  try{
+    const cleanMsgs=msgs.filter(m=>m.role!=='system'&&m.role!=='tool'&&!m.tool_calls);
+    if(!cleanMsgs.length)return null;
+    const contents=cleanMsgs.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:String(m.content||'...')}]}));
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEK}`,
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents,generationConfig:{maxOutputTokens:2048}}),signal:AbortSignal.timeout(30000)});
+    const d=await r.json();
+    if(!r.ok)return null;
+    return d.candidates?.[0]?.content?.parts?.[0]?.text||null;
+  }catch(e){return null;}
+}
+
 const SYSTEM=`Você é Daniela Coelho, IA avançada V15 com acesso COMPLETO ao ambiente de desenvolvimento.
 Você É um agente de código autônomo — igual ao Claude Code — com poder de:
 
@@ -533,7 +564,7 @@ export async function POST(req){
             while(iter<5){
               iter++;
               const gr=await groqStream(fMsgs,TOOLS,req.signal);
-              if(!gr.ok){send({type:'text',content:await geminiCall(fMsgs)});break;}
+              if(!gr.ok){const fb=await geminiCall(fMsgs)||await cohereCall(fMsgs)||'⏳ Tokens esgotados. Adicione mais chaves Groq em ⚙️ Configurações → IA & Contas.';send({type:'text',content:fb});break;}
               const reader=gr.body.getReader();const dec=new TextDecoder();
               let tc={};let ac='';
               while(true){const{done,value}=await reader.read();if(done)break;
