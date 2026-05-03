@@ -670,6 +670,7 @@ export async function GET(){
       position:i+1,
     })),
     updated_at:state.updated_at||null,
+    health:{groq:!!GK,gemini:!!GEK,cohere:!!CHK,together:!!TGK},
   });
 }
 
@@ -719,7 +720,14 @@ export async function POST(req){
             while(iter<5){
               iter++;
               const gr=await groqStream(fMsgs,TOOLS,req.signal);
-              if(!gr.ok){const fb=await geminiCall(fMsgs)||await cohereCall(fMsgs)||'⏳ Tokens esgotados. Adicione mais chaves Groq em ⚙️ Configurações → IA & Contas.';send({type:'text',content:fb});break;}
+              if(!gr.ok){
+        let fb=null;
+        for(const fn of[()=>cohereCall(fMsgs),()=>geminiCall(fMsgs),()=>togetherCall(fMsgs)]){
+          try{fb=await fn();if(fb)break;}catch(e){}
+        }
+        send({type:'text',content:fb||'⏳ Todos os tokens esgotados temporariamente. Reseta em breve!'});
+        break;
+      }
               const reader=gr.body.getReader();const dec=new TextDecoder();
               let tc={};let ac='';
               while(true){const{done,value}=await reader.read();if(done)break;
