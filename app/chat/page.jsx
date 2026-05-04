@@ -1,10 +1,9 @@
 "use client";
 import { useEffect } from "react";
 
-// Redirecionamento INSTANTÂNEO para o chat hospedado na Edge Function (zero limite Vercel)
 export default function ChatRedirect() {
   useEffect(() => {
-    window.location.replace("https://tpjvalzwkqwttvmszvie.supabase.co/functions/v1/daniela-app");
+    window.location.replace("https://repovazio.vercel.app/daniela.html");
   }, []);
   return (
     <div style={{
@@ -17,8 +16,7 @@ export default function ChatRedirect() {
         <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Carregando Daniela...</div>
         <div style={{fontSize:13, color:"#888"}}>
           Se não redirecionar:{" "}
-          <a href="https://tpjvalzwkqwttvmszvie.supabase.co/functions/v1/daniela-app"
-             style={{color:"#a78bfa"}}>clique aqui</a>
+          <a href="https://repovazio.vercel.app/daniela.html" style={{color:"#a78bfa"}}>clique aqui</a>
         </div>
       </div>
     </div>
